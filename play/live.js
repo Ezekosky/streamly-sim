@@ -164,7 +164,7 @@ function tickLiveStream(){
   const msgs = Math.min(3, Math.floor(L.viewers * 0.04 + Math.random() * (L.viewers > 0 ? 1.2 : 0.2)));
   for (let i = 0; i < msgs; i++){
     const pool = Math.random() < 0.35 && LIVE_CHAT[L.topic] ? LIVE_CHAT[L.topic] : LIVE_CHAT.any;
-    pushLiveChat({ by: randomHandle(), text: pool[Math.floor(Math.random() * pool.length)] });
+    pushLiveChat({ by: randomHandle(L.topic), text: pool[Math.floor(Math.random() * pool.length)] });
   }
   // Super Chats and memberships need Partner Programme tier 1 (fan funding)
   if (state.fanFunding){

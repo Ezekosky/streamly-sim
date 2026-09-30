@@ -264,6 +264,8 @@ const POSITIVE_COMMENTS = [
   "Algorithm, do your thing and push this.", "10/10 no notes.", "Please never stop making these.",
   "I love how real you are on camera.", "Bookmarked this for later, so useful.", "This is my comfort channel now.",
   "Sharing this everywhere.", "Better than half the big channels honestly.", "Subscribed on my second account too.",
+  "The music choice is perfect.", "You explain things so well.", "This is the content I signed up for.",
+  "Watching from Abuja, keep going!", "Big channels wish they had this energy.", "I needed a laugh today, thank you.",
 ];
 const NEUTRAL_COMMENTS = [
   "The algorithm brought me here.", "First!", "Saving this for later.", "Interesting take, never thought about it that way.",
@@ -272,58 +274,115 @@ const NEUTRAL_COMMENTS = [
   "Not sure I agree but respect the effort.", "Early squad.", "Your mic is a bit quiet, turned it all the way up.",
   "Where's this filmed?", "The intro could be shorter.", "Commenting for the algorithm.",
   "Watching this on my lunch break.", "Do a Q&A soon!", "What's the song at the start?", "Here before 1K views.",
+  "Who else is watching with subtitles?", "Drop your setup in the description.", "How long did this take to make?",
+  "Anyone here from Ghana?", "I'd love to see a collab with someone.", "Which video should I watch next?",
 ];
 const NEGATIVE_COMMENTS = [
   "Clickbait title honestly...", "Thumbnail lied to me.", "Kinda mid, not gonna lie.", "Skip to the end, you're welcome.",
   "Too much talking, not enough doing.", "The audio is rough.", "Didn't deliver what the title promised.",
   "Felt like it could've been 3 minutes shorter.", "Unsubscribing if the next one is like this.", "Where's the actual content?",
   "The sponsor segment was longer than the video.", "Liked your older stuff better.", "Why is the music so loud?",
+  "This felt rushed.", "Same video as last week honestly.", "I lost interest halfway through.",
 ];
 const CLICKBAIT_COMMENTS = [
   "Waited the whole video for the thing in the thumbnail.", "The red circle was the only exciting part.",
   "Title said one thing, video said another.", "I got baited and I'm not even mad. Okay I'm a bit mad.",
-  "Next time just show us the actual moment.",
+  "Next time just show us the actual moment.", "Where was the thing from the thumbnail?", "Bro really put an arrow on nothing.",
 ];
 const SHORTS_COMMENTS = [
   "Replayed this like 10 times.", "The loop is so smooth.", "Why is this so satisfying?", "Came from the Shorts feed, staying for the channel.",
   "Make a full video on this!", "Wait for it...", "Short but it hit.", "My thumb stopped scrolling for this one.",
+  "The timing on this is perfect.", "Part 2 please", "I watched this 5 times before I noticed the ending", "Who else rewatched?",
 ];
-const TOPIC_COMMENTS = {
-  gaming: [
-    "That clutch at the end was insane.", "What sensitivity do you play on?", "The meta is broken and you proved it.",
-    "Bro really said skill issue to the whole lobby.", "This is why I stopped playing ranked lol", "Drop your loadout please.",
-    "That play deserves its own video.", "Your aim is actually cracked.", "Speedrun community needs to see this.",
-  ],
-  tech: [
-    "Finally a review that isn't sponsored to death.", "Battery life test next?", "Is it worth it over last year's model?",
-    "That comparison chart was super helpful.", "Bought it because of this video, no regrets.", "What about the thermals?",
-    "Great breakdown for non-tech people.", "The unboxing ASMR at the start though.",
-  ],
-  lifestyle: [
-    "Your room setup is so cozy.", "Trying this routine tomorrow.", "Where's that lamp from?", "This made me want to clean my whole apartment.",
-    "The morning light in this video is unreal.", "Needed this motivation today.", "Can you share your weekly planner?",
-  ],
-  comedy: [
-    "I'm crying at 2:14", "The editing timing on the jokes is perfect.", "My stomach hurts from laughing.",
-    "Not the banana again", "I did NOT expect that ending.", "This is peak comedy.", "Sent this to my mom and she laughed too.",
-  ],
-  football: [
-    "That free kick was filthy.", "Rate the goalkeeper next!", "Who's your pick for the league this season?",
-    "The commentary voice is killing me.", "That skill move needs a slow-mo replay.", "Do a 5-a-side challenge next.",
-    "Tactical breakdowns like this are so rare.",
-  ],
-  cooking: [
-    "Made this tonight, family loved it.", "How long did you marinate it?", "Can I swap the butter for oil?",
-    "The sizzle sound is everything.", "Recipe in the description please!", "Adding extra pepper, sorry not sorry.",
-    "Tried it and burned it, my fault not yours.", "This is going in my weekly rotation.",
-  ],
+const LONG_VIDEO_COMMENTS = {
+  good: ["That was a long one but it flew by.", "Worth every minute.", "Perfect video to fall asleep to (in a good way).", "Didn't skip a single second.", "More long videos like this please.", "Watched the whole thing in one go."],
+  bad:  ["This could have been half the length.", "Too long, I skipped around a lot.", "Needed chapters, I got lost.", "Great topic but way too drawn out."],
 };
-const COMMENTER_FIRST = ['kay', 'tobi', 'lena', 'max', 'zara', 'dayo', 'nina', 'jay', 'amaka', 'leo', 'sade', 'chris', 'mira', 'femi', 'ola', 'riya', 'ben', 'ivy', 'kofi', 'eli', 'noor', 'sam', 'yemi', 'tara'];
-const COMMENTER_TAIL = ['_plays', 'watches', '99', 'x', '_tv', '.vibes', '2k', 'official', '_edits', 'lol', '_', 'fan', '07', 'irl'];
-function randomHandle(){
-  const a = COMMENTER_FIRST[Math.floor(Math.random() * COMMENTER_FIRST.length)];
-  const b = COMMENTER_TAIL[Math.floor(Math.random() * COMMENTER_TAIL.length)];
-  return '@' + a + b;
+const QUICK_VIDEO_COMMENTS = ["Too short! Make it longer next time.", "Wait, that's it?", "Short and sweet, love it.", "Straight to the point, respect."];
+const EDIT_COMMENTS = {
+  polished: ["The editing is next level.", "How long did this take to edit??", "The transitions are so clean.", "This looks like a TV show."],
+  quick:    ["The cuts are a bit rough.", "Audio jumps a few times.", "Kinda felt like a first draft.", "Needs a bit more editing, but good idea."],
+};
+const MOMENT_COMMENTS = ["{t} had me dying", "{t} is the best part", "Replayed {t} so many times", "The reaction at {t}", "{t} is where it gets good", "Nobody's talking about {t}", "{t} went crazy", "The editing at {t} though", "{t} I was not ready", "Came back just for {t}"];
+const TOPIC_TONE = {
+  gaming: {
+    pos: ["That clutch at the end was insane.", "Your aim is actually cracked.", "The meta is broken and you proved it.", "That play deserves its own video.", "Finally a gaming channel that isn't just yelling.", "Commentary is top tier.", "This strategy actually works, went up two ranks."],
+    neu: ["What sensitivity do you play on?", "Drop your loadout please.", "What rank are you right now?", "Which server do you play on?", "Controller or keyboard?"],
+    neg: ["That was a throw lol", "You got lucky on that last round.", "This loadout got patched already.", "Mid gameplay, great editing though."],
+  },
+  tech: {
+    pos: ["Finally a review that isn't sponsored to death.", "Great breakdown for non-tech people.", "Bought it because of this video, no regrets.", "That comparison was super helpful.", "Clear, honest and no fluff."],
+    neu: ["Battery life test next?", "Is it worth it over last year's model?", "What about the thermals?", "Price in naira?", "Does it work with Android?"],
+    neg: ["You didn't mention the price at all.", "This reads like an ad.", "Specs are outdated already.", "Skipped the most important feature."],
+  },
+  lifestyle: {
+    pos: ["Your room setup is so cozy.", "Trying this routine tomorrow.", "This made me want to clean my whole apartment.", "Needed this motivation today.", "The morning light in this video is unreal."],
+    neu: ["Where's that lamp from?", "Can you share your weekly planner?", "What time do you sleep?", "What app do you use for notes?"],
+    neg: ["This routine is not realistic for most people.", "Feels a bit staged.", "Nobody wakes up looking like that lol"],
+  },
+  comedy: {
+    pos: ["I'm crying.", "The editing timing on the jokes is perfect.", "My stomach hurts from laughing.", "This is peak comedy.", "Sent this to my mom and she laughed too.", "The accent at the end killed me."],
+    neu: ["Do one about school next.", "Who else relates way too much?", "Tag someone who does this.", "Part 2 with your friends please."],
+    neg: ["This joke has been done before.", "Trying too hard this time.", "Not your funniest, but okay."],
+  },
+  football: {
+    pos: ["That free kick was filthy.", "Tactical breakdowns like this are so rare.", "The commentary voice is killing me.", "That skill move needs a slow-mo replay.", "Best football content on here."],
+    neu: ["Rate the goalkeeper next!", "Who's your pick for the league this season?", "Do a 5-a-side challenge next.", "Which club do you support?", "Rate my team next."],
+    neg: ["That ranking is biased.", "You left out the best player.", "That wasn't even a foul."],
+  },
+  cooking: {
+    pos: ["Made this tonight, family loved it.", "The sizzle sound is everything.", "This is going in my weekly rotation.", "Easiest recipe I've followed.", "My mouth is watering."],
+    neu: ["How long did you marinate it?", "Can I swap the butter for oil?", "Recipe in the description please!", "What brand of rice is that?", "How many people does this feed?"],
+    neg: ["That's not how you make jollof.", "Too much oil for me.", "Tried it and burned it, my fault not yours.", "Where are the measurements?"],
+  },
+};
+/* Comments that react to what the video is actually about (matched against the title). */
+const KEYWORD_COMMENTS = [
+  { re: /ranked|rank/i,            lines: ["What rank did you end on?", "Ranked is pain, respect for grinding it.", "I'm stuck in the same rank lol"] },
+  { re: /setup|desk/i,             lines: ["Setup goals.", "Drop the setup list please.", "Cable management is clean."] },
+  { re: /recipe|jollof|rice|suya|pancake|burger|noodle/i, lines: ["Trying this recipe this weekend.", "Measurements please!", "Jollof wars are about to start in the comments."] },
+  { re: /5am|morning|routine/i,    lines: ["5AM? Respect, I can't.", "Trying this routine tomorrow, wish me luck.", "My alarm is already set."] },
+  { re: /react/i,                  lines: ["Your reactions are the best part.", "React to more of these!", "Watching you react is funnier than the video."] },
+  { re: /free kick|penalt|skill|goal/i, lines: ["Rate mine next!", "That technique is clean.", "I tried this and nearly broke my foot."] },
+  { re: /budget|cheap|naira|expensive/i, lines: ["Budget content is the best content.", "The cheap one won honestly.", "Prices keep going up though."] },
+  { re: /24 hours|week|30 days|month/i,  lines: ["The commitment is insane.", "Day 3 is where it got real.", "Do a 100 days version!"] },
+  { re: /prank|roommate|friends/i, lines: ["Your friends are too patient with you.", "Their face at the end!", "Do another prank please."] },
+  { re: /unbox|gadget|phone|laptop/i, lines: ["That unboxing was satisfying.", "Should I upgrade or wait?", "How's the battery life?"] },
+  { re: /challenge/i,              lines: ["I tried this challenge and failed immediately.", "Harder challenge next time!", "Who else is trying this now?"] },
+  { re: /tier|rank(ing|ed) every|rated|rate/i, lines: ["Your list is wrong and I respect it.", "Number 3 should be higher.", "Top 3 is correct though."] },
+];
+
+/* ---------- commenter handles: patterns x names x words ---------- */
+const COMMENTER_FIRST = [
+  'kay', 'tobi', 'lena', 'max', 'zara', 'dayo', 'nina', 'jay', 'amaka', 'leo', 'sade', 'chris', 'mira', 'femi', 'ola', 'riya', 'ben', 'ivy', 'kofi', 'eli',
+  'noor', 'sam', 'yemi', 'tara', 'tunde', 'chioma', 'emeka', 'ada', 'bola', 'kemi', 'ifeoma', 'segun', 'zainab', 'musa', 'uche', 'nkechi', 'david', 'sarah',
+  'mike', 'jess', 'omar', 'layla', 'kwame', 'akosua', 'priya', 'arjun', 'lucas', 'sofia', 'mateo', 'yuki', 'hana', 'jin', 'amir', 'fatima', 'josh', 'chloe',
+  'dami', 'seun', 'tolu', 'ngozi', 'ike', 'bisi', 'wale', 'funmi', 'gbenga', 'halima', 'aisha', 'kelechi', 'obinna', 'rita', 'mary', 'john', 'grace', 'peter',
+];
+const COMMENTER_TAIL = ['_plays', 'watches', '99', 'x', '_tv', '.vibes', '2k', 'official', '_edits', 'lol', '_', 'fan', '07', 'irl', '23', '.real', '_ng', 'tv', '01', '_xo', 'hq', '.jpg', '247', '_again', 'ok', 'fr'];
+const HANDLE_WORDS = {
+  any:       ['night', 'lazy', 'daily', 'real', 'quiet', 'lucky', 'random', 'sleepy', 'spicy', 'chill', 'golden', 'midnight', 'cosmic', 'tiny', 'loud', 'soft'],
+  nouns:     ['owl', 'fox', 'panda', 'mango', 'cloud', 'wave', 'pixel', 'comet', 'tiger', 'lemon', 'rocket', 'koala', 'ghost', 'bean', 'moon', 'sparrow'],
+  gaming:    ['clutch', 'noscope', 'respawn', 'lagking', 'headshot', 'grinder', 'speedrun', 'gg', 'loot', 'tryhard'],
+  tech:      ['byte', 'techie', 'pixel', 'wired', 'dev', 'circuit', 'gadget', 'reboot', 'kernel', 'hertz'],
+  lifestyle: ['cozy', 'matcha', 'plant', 'journal', 'sunrise', 'minimal', 'daydream', 'linen', 'reset', 'bloom'],
+  comedy:    ['meme', 'lmao', 'chaos', 'goofy', 'unserious', 'jokes', 'crying', 'silly', 'deadass', 'wahala'],
+  football:  ['fc', 'striker', 'tekkers', 'nutmeg', 'topbins', 'keeper', 'ballon', 'derby', 'pitch', 'volley'],
+  cooking:   ['chef', 'spice', 'jollof', 'pepper', 'kitchen', 'foodie', 'crumbs', 'sizzle', 'suya', 'bakes'],
+};
+const pickW = a => a[Math.floor(Math.random() * a.length)];
+function randomHandle(topic){
+  const first = pickW(COMMENTER_FIRST);
+  const topicWords = HANDLE_WORDS[topic] || HANDLE_WORDS.any;
+  const r = Math.random();
+  let h;
+  if (r < 0.3) h = first + pickW(COMMENTER_TAIL);
+  else if (r < 0.45) h = first + '_' + pickW(COMMENTER_FIRST);
+  else if (r < 0.62) h = pickW(HANDLE_WORDS.any) + pickW(HANDLE_WORDS.nouns) + (Math.random() < 0.5 ? Math.floor(Math.random() * 100) : '');
+  else if (r < 0.82) h = (Math.random() < 0.5 ? pickW(topicWords) + '_' + first : first + '.' + pickW(topicWords));
+  else if (r < 0.9) h = 'the' + first.charAt(0).toUpperCase() + first.slice(1) + pickW(['Show', 'Life', 'Files', 'Diaries', 'Zone']);
+  else h = first + Math.floor(1990 + Math.random() * 20);
+  return '@' + h.replace(/\s/g, '');
 }
 
 function getLevelInfo(xp){
@@ -599,21 +658,102 @@ function ensureAudienceMood(){
 }
 
 /* ---------- Video factory ---------- */
+/* =========================================================================
+   TITLES — a general bank per topic, plus Shorts-only and long-form-only
+   banks. generateTitle() picks by format and length and avoids repeating
+   anything you've posted recently. Rivals draw from TITLE_BANK too.
+   ========================================================================= */
 const TITLE_BANK = {
-  gaming:    ["Trying a New Gaming Setup", "I Broke the Meta in Ranked", "This Loadout is Actually Broken"],
-  comedy:    ["I Was NOT Ready For This", "Reacting to My Old Videos", "This Went Wrong Immediately"],
-  football:  ["This Skill Move NOBODY Expected", "Rating Free Kicks From 0-100", "The Craziest Comeback I've Seen"],
-  tech:      ["I Tried the New Setup for a Week", "This Gadget Changed My Workflow", "Unboxing the Weirdest Tech I Own"],
-  lifestyle: ["A Day in My Life as a Creator", "I Tried Waking Up at 5AM", "Redesigning My Whole Room"],
-  cooking:   ["1 AM Cooking Stream Gone Wrong", "Cooking With Only 3 Ingredients", "I Tried a Viral Recipe"],
+  gaming: [
+    "Trying a New Gaming Setup", "I Broke the Meta in Ranked", "This Loadout is Actually Broken", "I Played Ranked for 10 Hours Straight",
+    "The Most Toxic Lobby I've Ever Been In", "Ranking Every Weapon From Worst to Best", "I Only Used the Worst Gun All Game",
+    "Carrying My Little Brother to Victory", "This Glitch Should Not Exist", "I Tried the Hardest Challenge in the Game",
+    "Beating the Game Without Taking Damage", "My First Time Playing This Game", "Pro Tips Nobody Tells You",
+    "I Copied a Pro Player's Settings", "Playing With Random Teammates Until We Win", "Is This the Best Update Ever?",
+    "I Lost Every Match, Then This Happened", "Budget Gaming Setup vs Expensive Setup", "The Clutch That Saved My Rank",
+    "Speedrunning a Game I've Never Played", "I Hosted a Tournament for My Subscribers", "Why Everyone Is Quitting This Game",
+    "Reacting to My First Ever Gameplay", "One Life Only Challenge", "Unlocking Everything in One Day",
+  ],
+  comedy: [
+    "I Was NOT Ready For This", "Reacting to My Old Videos", "This Went Wrong Immediately", "Pranking My Roommate for a Week",
+    "Trying Weird Life Hacks So You Don't Have To", "Reading Your Worst Comments Out Loud", "I Let My Subscribers Control My Day",
+    "Things Every Nigerian Parent Says", "Types of People at a Wedding", "I Tried Stand-Up Comedy for the First Time",
+    "Acting Out My Childhood Memories", "Rating Viral Videos With My Friends", "If Streamers Worked Normal Jobs",
+    "The Most Awkward Moment of My Life", "Speaking Only in Movie Quotes for a Day", "My Friends Roasted My Channel",
+    "Trying to Make My Mum Laugh", "Recreating Old Memes in Real Life", "Every Group Chat Has These People",
+    "I Said Yes to Everything for 24 Hours", "Bad Advice Only", "Guess Who Is Lying", "Explaining the Internet to My Grandma",
+    "Worst Job Interview Ever", "Things That Just Make Sense",
+  ],
+  football: [
+    "This Skill Move NOBODY Expected", "Rating Free Kicks From 0-100", "The Craziest Comeback I've Seen", "I Trained Like a Pro for a Week",
+    "Crossbar Challenge With My Friends", "Top 10 Goals of the Season", "Reacting to the Worst Referee Decisions",
+    "Can I Score From the Halfway Line?", "Sunday League vs Academy Players", "Predicting the Whole Season",
+    "Recreating Iconic Goals", "1v1 Against a Former Pro", "The Best Tekkers in the Street", "Every Penalty Taker Ranked",
+    "Transfer Window Winners and Losers", "My Dream Team Lineup", "Why This Team Keeps Losing", "Learning a Skill in 7 Days",
+    "Street Football in Lagos", "Goalkeeper for a Day", "The Most Underrated Player Right Now", "Watching the Derby Live Reaction",
+    "Juggling Challenge: Can I Beat My Record?", "Fans Picked My Team", "Rating Every Kit This Season",
+  ],
+  tech: [
+    "I Tried the New Setup for a Week", "This Gadget Changed My Workflow", "Unboxing the Weirdest Tech I Own", "Cheap vs Expensive Earbuds",
+    "I Used a Budget Phone for 30 Days", "My Desk Setup Tour", "Tech I Regret Buying", "Is This Laptop Worth the Hype?",
+    "Building a PC for My Little Brother", "10 Apps You Need on Your Phone", "I Fixed My Broken Phone Myself",
+    "Testing Viral Gadgets From the Internet", "The Best Budget Mic for Creators", "How I Edit My Videos", "Phone Camera Test at Night",
+    "Smartwatch After 6 Months", "Every Phone I've Owned Ranked", "Wireless Charging Is a Scam?", "Testing the Fastest Charger",
+    "My Streaming Setup on a Budget", "Tech Under 10K Naira", "I Tried Living Without My Phone", "Upgrading My Old Laptop",
+    "Gadgets That Actually Make Life Easier", "Explaining AI in 10 Minutes",
+  ],
+  lifestyle: [
+    "A Day in My Life as a Creator", "I Tried Waking Up at 5AM", "Redesigning My Whole Room", "My Morning Routine That Changed Everything",
+    "What I Eat in a Day", "Cleaning My Entire Apartment", "Living on a Tight Budget for a Week", "My Night Routine",
+    "Moving Into My First Apartment", "Things I Wish I Knew at 18", "Organizing My Life for the New Year", "A Week of Studying",
+    "My Honest Thoughts on Hustle Culture", "Trying a Digital Detox", "Weekend Vlog: Just Vibes", "Room Tour 2026",
+    "How I Stay Productive", "I Went to the Gym Every Day for a Month", "Answering Your Questions", "Budget Room Makeover",
+    "Spend the Day With Me", "Habits That Changed My Life", "My Skincare Routine", "Rating My Old Outfits", "Rainy Day Reset",
+  ],
+  cooking: [
+    "1 AM Cooking Stream Gone Wrong", "Cooking With Only 3 Ingredients", "I Tried a Viral Recipe", "Making Jollof for the First Time",
+    "Cheap vs Expensive Burger", "Cooking My Mum's Recipe", "Street Food Taste Test", "I Cooked for My Friends and They Rated It",
+    "Perfect Fried Rice Every Time", "Easy Meals for Students", "Trying Food From 5 Countries", "Making Pancakes 3 Ways",
+    "The Spiciest Thing I've Ever Cooked", "One Pot Meals for Lazy Days", "Recreating a Restaurant Dish at Home",
+    "Cooking With Leftovers Only", "My Go-To Breakfast", "Baking Without an Oven", "Making Suya at Home", "Meal Prep for the Week",
+    "Rating Instant Noodles", "Chef vs Home Cook", "I Only Ate Homemade Food for a Week", "Quick Snacks Under 10 Minutes",
+    "The Ultimate Pepper Soup",
+  ],
 };
-function generateTitle(topicKey){
-  const bank = TITLE_BANK[topicKey];
-  return bank[Math.floor(Math.random() * bank.length)];
+const SHORTS_TITLES = {
+  gaming:    ["Wait for the ending", "This clutch was insane", "1 HP comeback", "POV: your teammate finally plays", "Rate this play 1-10", "How did this hit?", "The cleanest shot of my life", "Nobody saw this coming", "Lag or skill?", "When the game glitches perfectly"],
+  comedy:    ["POV: your mum sees the light bill", "When the teacher says 'group work'", "Every Nigerian aunty at a party", "Me pretending to understand", "Wait for it", "When the WiFi dies mid-game", "Things that just make sense", "Bro thought he did something", "Why is this so true?", "The awkward handshake"],
+  football:  ["Top bins", "Did he really just do that?", "Rate this free kick", "Nutmeg of the year", "Keeper had no chance", "The ref missed this", "Skill check", "One touch finish", "Wait for the celebration", "Corner kick straight in"],
+  tech:      ["This gadget is too smart", "Hidden phone trick", "3 settings to change right now", "Cheap vs expensive in 30 seconds", "You're charging wrong", "Satisfying unboxing", "This app is free?", "Tiny gadget, big upgrade", "Desk setup glow up", "Try this shortcut"],
+  lifestyle: ["5AM check-in", "Room reset in 60 seconds", "Small habit, big change", "What I spent today", "Get ready with me", "Clean with me", "My desk before and after", "Tiny apartment hack", "Morning motivation", "The 2 minute rule"],
+  cooking:   ["Crispiest eggs ever", "3 ingredient snack", "Wait for the sizzle", "The only way to cook rice", "Rate this plate", "Midnight noodles", "Don't skip this step", "Quick breakfast hack", "Is this too much pepper?", "The perfect flip"],
+};
+const LONG_TITLES = {
+  gaming:    ["I Played 24 Hours Straight: Here's What Happened", "The Complete Beginner's Guide", "From Worst to Best: Full Ranked Journey", "Every Secret in the Game Explained", "The Full Story of My Worst Losing Streak"],
+  comedy:    ["24 Hours of Saying Yes", "The Longest Prank I've Ever Pulled", "Reacting to Every Video I've Ever Made", "Our Most Chaotic Group Trip", "One Full Day as My Little Brother"],
+  football:  ["Full Season Review: Every Team Rated", "I Trained With an Academy for a Whole Day", "The Complete History of the Derby", "Tactics Explained for Beginners", "Every Goal I Scored This Year"],
+  tech:      ["The Ultimate Buying Guide", "My Complete Editing Workflow", "30 Days With a Budget Phone: Full Review", "Building My Dream Setup From Scratch", "Every Gadget on My Desk Explained"],
+  lifestyle: ["A Full Week in My Life", "I Changed My Whole Routine for 30 Days", "The Complete Room Transformation", "Honest Q&A: Everything You Asked", "Moving Out: The Full Story"],
+  cooking:   ["Cooking a Full Party Menu", "The Complete Guide to Jollof", "7 Days, 7 Countries, 7 Dishes", "Feeding My Whole Family for a Week", "Everything I Learned From Culinary School Videos"],
+};
+function generateTitle(topicKey, formatKey, lengthKey){
+  let pool;
+  if (formatKey === 'shorts') pool = Math.random() < 0.75 ? SHORTS_TITLES[topicKey] : TITLE_BANK[topicKey];
+  else if (lengthKey === 'm15' || lengthKey === 'm25') pool = Math.random() < 0.45 ? LONG_TITLES[topicKey] : TITLE_BANK[topicKey];
+  else pool = TITLE_BANK[topicKey];
+  pool = pool || TITLE_BANK.gaming;
+  // don't repeat any of your last 20 titles if there's something fresh left
+  const recent = new Set((state.videos || []).slice(-20).map(v => v.title));
+  const fresh = pool.filter(t => ![...recent].some(r => r.indexOf(t) !== -1));
+  const from = fresh.length ? fresh : pool;
+  return from[Math.floor(Math.random() * from.length)];
 }
+const CURIOSITY_WRAPS = ["You Won't Believe What Happened: {t}", "{t} (Gone Wrong)", "Nobody Expected This: {t}", "{t}... The Ending Shocked Me", "I Can't Believe This Worked: {t}", "{t} (Watch Till the End)"];
+const QUESTION_WRAPS = ["{t}?", "{t}... Am I Wrong?", "Why Does Nobody Talk About This? {t}", "{t} (Honest Opinion?)", "Be Honest: {t}?"];
 function applyTitleStyle(title, styleKey){
-  if (styleKey === 'curiosity') return `You Won't Believe What Happened: ${title}`;
-  if (styleKey === 'question') return `${title}?`;
+  const wrap = (list) => list[Math.floor(Math.random() * list.length)].replace('{t}', title);
+  if (styleKey === 'curiosity') return wrap(CURIOSITY_WRAPS);
+  if (styleKey === 'question') return /\?$/.test(title) ? title : wrap(QUESTION_WRAPS);
   return title;
 }
 
@@ -667,8 +807,8 @@ function createVideo(topicKey, thumbKey, lengthKey, effortKey, titleStyleKey, fo
   const video = {
     id: crypto.randomUUID ? crypto.randomUUID() : String(Math.random()),
     title: extras.collab
-      ? `Ft. ${extras.collab.name} — ${applyTitleStyle(generateTitle(topicKey), titleStyleKey)}`
-      : applyTitleStyle(generateTitle(topicKey), titleStyleKey),
+      ? `Ft. ${extras.collab.name} — ${applyTitleStyle(generateTitle(topicKey, formatKey, lengthKey), titleStyleKey)}`
+      : applyTitleStyle(generateTitle(topicKey, formatKey, lengthKey), titleStyleKey),
     ab,
     collab: extras.collab ? { name: extras.collab.name, subs: extras.collab.subs, resolved: false } : null,
     fatigued: fatigue > 0,
@@ -743,18 +883,43 @@ function deriveVideoFlavor(v){
   v.comments = generateComments(v);
 }
 
-/* One comment, picked from the pool that matches how the video is doing right now. */
+/* One comment that fits THIS video: its topic, what the title is about, Shorts vs long-form,
+   length, editing effort, whether the thumbnail over-promised, and how it's doing right now. */
 function makeComment(v){
-  const posChance = clamp(0.35 + ((v.satisfaction || 50) - 50) / 130, 0.12, 0.92);
-  const baited = (v.ctr || 0) >= 18 && (v.retention || 50) < 42 && (v.thumb === 'shock' || v.titleStyle === 'curiosity');
-  const roll = Math.random();
-  let pool;
-  if (baited && roll < 0.35) pool = CLICKBAIT_COMMENTS;
-  else if (v.format === 'shorts' && roll < 0.3) pool = SHORTS_COMMENTS;
-  else if (roll < posChance) pool = Math.random() < 0.45 && TOPIC_COMMENTS[v.topic] ? TOPIC_COMMENTS[v.topic] : POSITIVE_COMMENTS;
-  else if (roll < posChance + 0.22) pool = Math.random() < 0.3 && TOPIC_COMMENTS[v.topic] ? TOPIC_COMMENTS[v.topic] : NEUTRAL_COMMENTS;
-  else pool = NEGATIVE_COMMENTS;
-  return { by: randomHandle(), text: pool[Math.floor(Math.random() * pool.length)] };
+  const sat = v.satisfaction || 50, ret = v.retention || 50, ctr = v.ctr || 5;
+  const posChance = clamp(0.35 + (sat - 50) / 130, 0.12, 0.92);
+  const tone = Math.random() < posChance ? 'pos' : Math.random() < 0.55 ? 'neu' : 'neg';
+  const baited = ctr >= 18 && ret < 42 && (v.thumb === 'shock' || v.titleStyle === 'curiosity');
+  const isShort = v.format === 'shorts';
+  const longForm = !isShort && (v.length === 'm15' || v.length === 'm25');
+  const title = v.title || '';
+  const say = (text) => ({ by: randomHandle(v.topic), text, likes: Math.floor(Math.pow(Math.random(), 3) * Math.max(3, (v.views || 0) * 0.02)) });
+  const r = Math.random();
+
+  if (baited && r < 0.35) return say(pickW(CLICKBAIT_COMMENTS));
+  if (r < 0.2){
+    const kw = KEYWORD_COMMENTS.filter(k => k.re.test(title));
+    if (kw.length) return say(pickW(pickW(kw).lines));
+  }
+  if (r < 0.32){
+    if (isShort) return say(pickW(SHORTS_COMMENTS));
+    if (longForm) return say(pickW(ret >= 45 ? LONG_VIDEO_COMMENTS.good : LONG_VIDEO_COMMENTS.bad));
+    if (v.length === 'm3') return say(pickW(QUICK_VIDEO_COMMENTS));
+  }
+  if (r < 0.42 && !isShort && (v.durationSec || 0) >= 120){
+    // timestamps always land inside the real video length
+    const t = Math.floor(rand(15, (v.durationSec || 120) - 5));
+    return say(pickW(MOMENT_COMMENTS).replace('{t}', `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`));
+  }
+  if (r < 0.5 && (v.effort === 'polished' || v.effort === 'quick')) return say(pickW(EDIT_COMMENTS[v.effort]));
+  if (r < 0.56){
+    if (v.status === 'trending') return say(pickW(["Who's here after this blew up?", "The algorithm finally did its job.", "From 0 to trending, crazy.", "This is everywhere on my feed."]));
+    if (v.collab && v.collab.name) return say(pickW([`Came from ${v.collab.name}'s channel, instant sub.`, `You and ${v.collab.name} need to do this again.`, `${v.collab.name} brought me here!`]));
+    if (state.subs < 100) return say(pickW(["Early gang, you're going to blow up.", "Found you before you got big.", "Only this many subs?? Criminal."]));
+  }
+  const topicPool = TOPIC_TONE[v.topic] && TOPIC_TONE[v.topic][tone];
+  if (topicPool && Math.random() < 0.55) return say(pickW(topicPool));
+  return say(pickW(tone === 'pos' ? POSITIVE_COMMENTS : tone === 'neu' ? NEUTRAL_COMMENTS : NEGATIVE_COMMENTS));
 }
 function generateComments(v){
   const n = Math.floor(rand(2, 4));
@@ -764,7 +929,7 @@ function generateComments(v){
 }
 function commentHTML(c){
   if (typeof c === 'string') return `<div class="comment-line">${c}</div>`; // saves from before handles existed
-  return `<div class="comment-line"><span class="c-by">${c.by}</span>${c.text}</div>`;
+  return `<div class="comment-line"><span class="c-by">${c.by}</span><span class="c-text">${c.text}</span>${c.likes ? `<span class="c-likes">${ic('heart')}${fmtCompact(c.likes)}</span>` : ''}</div>`;
 }
 
 /* ---------- Outcome roll: decides the video's growth "personality", not a single number ---------- */

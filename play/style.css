@@ -2065,3 +2065,7 @@ body{ font-size:13px; }
   .ld-stats{ grid-template-columns:repeat(2, minmax(0,1fr)); }
 }
 .reset-box{ width:min(400px, 92vw); text-align:left; } .reset-box .set-note{ margin:8px 0 18px; }
+.comment-line{ display:flex; align-items:baseline; gap:0; }
+.comment-line .c-text{ flex:1; min-width:0; }
+.comment-line .c-likes{ display:inline-flex; align-items:center; gap:3px; margin-left:10px; font-size:11px; color:var(--faint); white-space:nowrap; font-variant-numeric:tabular-nums; }
+.comment-line .c-likes .inline-ic{ width:11px; height:11px; margin:0; }
