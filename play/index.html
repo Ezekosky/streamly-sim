@@ -1,0 +1,924 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f2527">
+<title>Streamly Sim</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<meta name="description" content="Play Streamly Sim free in your browser: a creator-life sim by AetherEdge Studios.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<!--
+  REAL ADS, option A — Google AdSense H5 Games Ads, for a copy hosted on YOUR OWN domain
+  (e.g. streamly.yourname.com on Vercel). Needs an approved AdSense account + H5 Games Ads approval.
+  Replace ca-pub-XXXXXXXXXXXXXXXX with your publisher ID. Remove data-adbreak-test="on" to go live.
+  <script async data-ad-client="ca-pub-XXXXXXXXXXXXXXXX" data-adbreak-test="on" src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js" crossorigin="anonymous"></script>
+  <script>window.STREAMLY_ADSENSE = true; window.adsbygoogle = window.adsbygoogle || []; window.adBreak = window.adConfig = function(o){ adsbygoogle.push(o); };</script>
+
+  REAL ADS, option B: uncomment ONE of these when you submit to that portal. With nothing
+  enabled the game falls back to in-game "house ads" that pay nothing.
+  <script src="https://sdk.crazygames.com/crazygames-sdk-v3.js"></script>
+  <script src="https://game-cdn.poki.com/scripts/v2/poki-sdk.js"></script>
+-->
+</head>
+<body>
+
+  <div class="boot-loader-root" id="boot-loader">
+    <canvas id="particles"></canvas>
+
+    <div id="boot">
+      <div id="bootLines"></div>
+      <div id="bootSync"></div>
+    </div>
+
+    <div class="loader" id="loader">
+      <div class="ld-brand">
+        <div class="ld-mark"><svg viewBox="0 0 24 24"><path d="M9 6.5v11l9-5.5z"/></svg></div>
+        <div class="ld-name">Streamly<em>Sim</em></div>
+      </div>
+      <div class="tagline" id="tagline"></div>
+
+      <div class="stats-row" hidden aria-hidden="true">
+        <span id="subCount"></span><svg id="heartTop" viewBox="0 0 24 24"></svg><svg id="bell" viewBox="0 0 24 24"></svg>
+      </div>
+
+      <div class="progress-wrap">
+        <div class="progress-bar"><div class="progress-fill" id="fill"></div></div>
+        <div class="progress-meta">
+          <span id="ld-step">Loading studio</span>
+          <span><span id="pct">0</span>%</span>
+        </div>
+      </div>
+
+      <div class="tip" id="tip"></div>
+    </div>
+
+    <button id="skipBtn">Skip intro</button>
+
+    <div class="footer">
+      <span class="ld-studio">AetherEdge Studios</span>
+      <span class="ld-ver">v0.7</span>
+    </div>
+  </div>
+
+  <div id="flash"></div>
+  <div class="rotate-gate" id="rotate-gate" aria-hidden="true">
+    <div class="rg-phone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M11 18.5h2"/></svg></div>
+    <div class="rg-title">Rotate your phone</div>
+    <div class="rg-sub">Streamly Sim plays in landscape.</div>
+  </div>
+
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark"><svg viewBox="0 0 24 24"><path d="M9 6.5v11l9-5.5z"/></svg></div>
+        <div class="brand-name">Streamly<em>Sim</em></div>
+      </div>
+
+      <nav class="nav-group">
+        <button class="nav-btn active" data-tab="home">
+          <span class="icon svg-nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.6 12 3.4l9 7.2"/><path d="M5.5 9.6V19a1.6 1.6 0 0 0 1.6 1.6h9.8A1.6 1.6 0 0 0 18.5 19V9.6"/><path d="M9.8 20.6v-5.4h4.4v5.4"/></svg></span>
+          <span class="label">Home</span>
+        </button>
+        <button class="nav-btn" data-tab="content">
+          <span class="icon svg-nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6.5" width="13" height="11" rx="2.5"/><path d="m15.5 10.8 5.2-2.8v8l-5.2-2.8z"/></svg></span>
+          <span class="label">Content</span>
+        </button>
+        <button class="nav-btn" data-tab="analytics">
+          <span class="icon svg-nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 3.5v17h17"/><path d="M8 16.5v-3.5"/><path d="M13 16.5v-8"/><path d="M18 16.5v-11"/></svg></span>
+          <span class="label">Analytics</span>
+        </button>
+        <button class="nav-btn" data-tab="monetization">
+          <span class="icon svg-nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="7" width="19" height="14" rx="2.5"/><path d="m16.5 2.5-4.5 4.5-4.5-4.5"/></svg></span>
+          <span class="label">Monetization</span>
+        </button>
+        <button class="nav-btn" data-tab="shop">
+          <span class="icon svg-nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.8"/><path d="M12 2.5v2.2M12 19.3v2.2M4.9 4.9l1.6 1.6M17.5 17.5l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.9 19.1l1.6-1.6M17.5 6.5l1.6-1.6"/></svg></span>
+          <span class="label">Customization</span>
+        </button>
+        <button class="nav-btn" data-tab="feed" id="nav-discover">
+          <span class="icon svg-nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m15.6 8.4-2.1 5.1-5.1 2.1 2.1-5.1z"/></svg></span>
+          <span class="label">Feed</span>
+        </button>
+        <button class="nav-btn nav-create" data-tab="studio">
+          <span class="icon svg-nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg></span>
+          <span class="label">Create</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-bottom">
+        <div class="level-block">
+          <div class="level-line">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3.6 2.5 5.1 5.6.8-4.1 4 1 5.6-5-2.7-5 2.7 1-5.6-4.1-4 5.6-.8z"/></svg>
+            <div>
+              <div class="t">Channel Level</div>
+              <div class="v" id="creator-level">Lv. 1</div>
+            </div>
+          </div>
+          <div class="xp-track"><div class="xp-fill" id="xp-fill" style="width:0%"></div></div>
+          <div class="xp-count" id="xp-count">0 / 300 subs</div>
+        </div>
+        <button class="nav-btn settings-btn" id="settings-btn" type="button" data-tab="settings">
+          <span class="icon svg-nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 14.5a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5v.2a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1h-.2a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3h.1a1.6 1.6 0 0 0 1-1.5v-.2a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8v.1a1.6 1.6 0 0 0 1.5 1h.2a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg></span>
+          <span class="label">Settings</span>
+        </button>
+      </div>
+    </aside>
+
+    <div class="main">
+      <header class="topbar">
+        <div class="topbar-right">
+          <div class="day-chip">
+            <svg class="ic" viewBox="0 0 24 24"><rect x="3" y="4.8" width="18" height="16.2" rx="2.4"/><path d="M3 9.6h18M8 3v3.4M16 3v3.4"/></svg>
+            <span id="game-clock">Day 1 · 9:00 AM</span>
+          </div>
+          <div class="day-chip">
+            <svg class="ic" viewBox="0 0 24 24"><rect x="2.8" y="6" width="18.4" height="13" rx="2.6"/><path d="M2.8 10.5h18.4"/><circle cx="17.4" cy="14.6" r="1.1"/></svg>
+            <span id="topbar-money">$100</span>
+          </div>
+          <div class="day-chip">
+            <svg class="ic" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.6 19.6c.7-3 3-4.6 5.4-4.6s4.7 1.6 5.4 4.6"/><path d="M16.2 5.2a3.2 3.2 0 0 1 0 5.8M17.6 15.4c1.8.5 3 1.9 3.4 4.2"/></svg>
+            <span id="topbar-subs">0</span><em class="chip-unit">Subscribers</em>
+          </div>
+          <div class="day-chip energy-chip" title="Creator energy">
+            <svg class="ic" viewBox="0 0 24 24"><path d="M13.2 2.5 4.8 13.4h5.9L9.8 21.5l8.9-11.2h-6z"/></svg>
+            <span id="topbar-energy">100</span>
+          </div>
+          <button class="icon-btn" id="bell-btn" aria-label="Notifications">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 9a6 6 0 1 0-12 0c0 6-2 7.5-2 7.5h16S18 15 18 9z"/><path d="M13.7 20.4a2 2 0 0 1-3.4 0"/></svg>
+            <span class="bell-dot" id="bell-dot"></span>
+          </button>
+          <button class="avatar" id="channel-avatar" aria-label="Channel"></button>
+        </div>
+      </header>
+
+      <div class="page">
+      <div class="app-body">
+
+    <div class="tab-content active" id="tab-home">
+      <div class="home-greet">
+        <h1 class="home-greet-title">Good <span id="greet-time">morning</span>, Creator <svg class="ic wave-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 13V6a2 2 0 114 0v5M12 11V4a2 2 0 114 0v7M16 12V6a2 2 0 114 0v8a7 7 0 01-14 0v-2.5c0-1 .8-2 2-2 .7 0 1.3.3 1.7.8"/></svg></h1>
+        <div class="home-greet-sub">Let's grow your channel today.</div>
+      </div>
+
+      <section class="stats-4">
+        <div class="stat-card">
+          <div class="stat-top">
+            <div class="stat-ic si-violet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></svg></div>
+            <span class="stat-lbl">Total Views</span>
+          </div>
+          <div class="stat-val mono" id="stat-views">0</div>
+          <div class="stat-delta mono" id="stat-views-delta"></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-top">
+            <div class="stat-ic si-purple"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M4 19.5c.6-2.8 2.7-4.2 5-4.2s4.4 1.4 5 4.2"/><path d="M15.5 5.5a3 3 0 010 5.5M17.5 15.6c1.5.6 2.4 1.9 2.7 3.9"/></svg></div>
+            <span class="stat-lbl">Subscribers</span>
+          </div>
+          <div class="stat-val mono" id="stat-subs">0</div>
+          <div class="stat-delta mono" id="stat-subs-delta"></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-top">
+            <div class="stat-ic si-green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20"/><path d="M17 5.5H9.75a3.25 3.25 0 0 0 0 6.5h4.5a3.25 3.25 0 0 1 0 6.5H6.5"/></svg></div>
+            <span class="stat-lbl">Balance</span>
+          </div>
+          <div class="stat-val mono" id="stat-money">$100</div>
+          <div class="stat-delta mono" id="stat-money-delta"></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-top">
+            <div class="stat-ic si-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6"/></svg></div>
+            <span class="stat-lbl">Watch Time</span>
+          </div>
+          <div class="stat-val mono" id="stat-watchtime">0 min</div>
+        </div>
+      </section>
+
+      <div class="home-top-grid">
+        <div class="panel-box perf-card">
+          <div class="perf-head">
+            <h3 style="margin:0;">Channel Performance</h3>
+            <div class="range-tabs" id="range-tabs">
+              <button class="range-tab active" data-range="7">Last 7 Days</button>
+              <button class="range-tab" data-range="28">Last 28 Days</button>
+              <button class="range-tab" data-range="90">Last 90 Days</button>
+            </div>
+          </div>
+          <div class="perf-mini-row">
+            <div class="perf-mini">
+              <div class="k">Views</div>
+              <div class="v mono" id="perf-views">0</div>
+              <div class="d" id="perf-views-d"></div>
+            </div>
+            <div class="perf-mini">
+              <div class="k">Subscribers</div>
+              <div class="v mono" id="perf-subs">+0</div>
+              <div class="d" id="perf-subs-d"></div>
+            </div>
+            <div class="perf-mini">
+              <div class="k">Revenue</div>
+              <div class="v mono" id="perf-revenue">$0</div>
+              <div class="d" id="perf-revenue-d"></div>
+            </div>
+          </div>
+          <div class="perf-chart-wrap">
+            <div class="perf-y-axis" id="perf-y-axis"><!-- injected --></div>
+            <div class="perf-chart-area">
+              <div class="sparkline" id="views-sparkline"><!-- injected --></div>
+              <div class="perf-tooltip" id="perf-tooltip"></div>
+            </div>
+          </div>
+          <div class="perf-x-axis" id="perf-x-axis"><!-- injected --></div>
+          <div class="chart-empty" id="chart-empty" style="display:none;">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="width:26px;height:26px"><path d="M4 20V12M9.5 20V6M15 20v-8M20 20V4"/></svg>
+            <div class="ce-title">The chart wakes up once views start rolling in.</div>
+            <div class="ce-sub">Upload from the Studio tab to get your first hour of data.</div>
+          </div>
+        </div>
+
+        <div class="panel-box latest-card">
+          <div class="lu-head">
+            <h3 style="margin:0;">Latest Upload</h3>
+            <a class="full-analytics-link" href="javascript:void(0)" onclick="openVideoAnalytics()">View details
+              <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px"><path d="M9 6l6 6-6 6"/></svg>
+            </a>
+          </div>
+          <div id="latest-upload-card"><!-- injected --></div>
+        </div>
+
+        <div class="side-col">
+          <div class="panel-box cp-panel">
+            <div class="card-head-row">
+              <h3 style="margin:0;">Channel Progress</h3>
+              <span class="dots-menu">&#8942;</span>
+            </div>
+            <div id="channel-progress-card"><!-- injected --></div>
+            <div class="algo-stars-row">
+              <span class="algo-stars-label">Algorithm rating</span>
+              <span class="algo-stars" id="algo-stars"></span>
+            </div>
+          </div>
+
+          <div class="panel-box summary-panel">
+            <h3><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><path d="M12 2l1.5 5.5L19 9l-5.5 1.5L12 16l-1.5-5.5L5 9l5.5-1.5z"/></svg> Today's Summary</h3>
+            <div class="sum-rows">
+              <div class="sum-row">
+                <span class="sum-ic si-purple"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 5.5v13l11-6.5z"/></svg></span>
+                <span class="sum-val mono" id="today-views">+0</span>
+                <span class="sum-label">Views</span>
+              </div>
+              <div class="sum-row">
+                <span class="sum-ic si-violet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M4 19.5c.6-2.8 2.7-4.2 5-4.2s4.4 1.4 5 4.2"/></svg></span>
+                <span class="sum-val mono" id="today-subs">+0</span>
+                <span class="sum-label">Subscribers</span>
+              </div>
+              <div class="sum-row">
+                <span class="sum-ic si-green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20"/><path d="M17 5.5H9.75a3.25 3.25 0 0 0 0 6.5h4.5a3.25 3.25 0 0 1 0 6.5H6.5"/></svg></span>
+                <span class="sum-val mono" id="today-money">+$0</span>
+                <span class="sum-label">Revenue</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel-box qa-panel">
+            <h3>Quick Actions</h3>
+            <div class="qa-rows">
+              <button class="qa-row" onclick="switchTab('studio')">
+                <span class="qa-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 5.5v13l11-6.5z"/></svg></span>
+                <span class="qa-label">Create New Video</span>
+                <svg class="ic qa-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+              </button>
+              <button class="qa-row" onclick="switchTab('analytics')">
+                <span class="qa-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V12M9.5 20V6M15 20v-8M20 20V4"/></svg></span>
+                <span class="qa-label">View Analytics</span>
+                <svg class="ic qa-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+              </button>
+              <button class="qa-row" onclick="switchTab('shop')">
+                <span class="qa-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8h11l-2.5-2.5M19 16H8l2.5 2.5"/></svg></span>
+                <span class="qa-label">Upgrade Equipment</span>
+                <svg class="ic qa-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+              </button>
+              <button class="qa-row" onclick="switchTab('feed')">
+                <span class="qa-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2c1 4-3 5-3 9a5.5 5.5 0 0011 0c0-2-1-3.5-1-3.5S17 9 16 9.5C16.5 7 14 3 12 2z"/></svg></span>
+                <span class="qa-label">Check Trends</span>
+                <svg class="ic qa-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="home-bottom-grid">
+        <div class="panel-box recent-panel">
+          <div class="spark-head">
+            <h3 style="margin:0;">Recent Videos</h3>
+            <a class="full-analytics-link" href="javascript:void(0)" onclick="switchTab('studio')">View all
+              <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px"><path d="M9 6l6 6-6 6"/></svg>
+            </a>
+          </div>
+          <div class="rv-table-head">
+            <span>Video</span><span>Views</span><span>CTR</span><span>Revenue</span><span>Status</span>
+          </div>
+          <div id="recent-videos-table"><!-- injected --></div>
+        </div>
+
+        <div class="panel-box trending-panel">
+          <div class="card-head-row">
+            <h3 style="margin:0;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><path d="M12 2c1 4-3 5-3 9a5.5 5.5 0 0011 0c0-2-1-3.5-1-3.5S17 9 16 9.5C16.5 7 14 3 12 2z"/></svg> Trending Topics</h3>
+            <a class="full-analytics-link" href="javascript:void(0)" onclick="switchTab('feed')">View more
+              <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px"><path d="M9 6l6 6-6 6"/></svg>
+            </a>
+          </div>
+          <div id="trending-topics-list"><!-- injected --></div>
+        </div>
+      </div>
+
+      <div class="panel-box">
+        <h3>Top performing video</h3>
+        <div id="top-video-card"><!-- injected --></div>
+      </div>
+
+      <div class="panel-box">
+        <h3>Today's audience</h3>
+        <div class="mood-list" id="audience-mood-list"><!-- injected --></div>
+        <div class="algo-note">Mood shifts once per in-game day — pick topics that are hot right now.</div>
+      </div>
+
+      <div class="panel-box">
+        <h3>Notifications</h3>
+        <div class="notifications-list" id="notifications-list"><!-- injected --></div>
+      </div>
+    </div>
+
+    <div class="tab-content" id="tab-content">
+      <div class="content-head-row">
+        <div>
+          <h2 class="shop-title">Content</h2>
+          <div class="shop-sub">Manage your videos and performance.</div>
+        </div>
+        <button class="create-video-btn" onclick="switchTab('studio')">
+          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M12 5v14M5 12h14"/></svg>
+          Create Video
+        </button>
+      </div>
+
+      <div class="shop-tabs content-subtabs" id="content-subtabs">
+        <button type="button" class="shop-tab underline-tab active" data-sub="videos">Videos</button>
+        <button type="button" class="shop-tab underline-tab" data-sub="live">Live Streams</button>
+        <button type="button" class="shop-tab underline-tab" data-sub="shorts">Shorts</button>
+        <button type="button" class="shop-tab underline-tab" data-sub="playlists">Playlists</button>
+      </div>
+
+      <div class="video-list" id="video-list"><!-- injected --></div>
+      <div class="content-pager" id="content-pager"><!-- injected --></div>
+    </div>
+
+    <div class="tab-content" id="tab-studio">
+      <div class="content-head-row">
+        <div>
+          <h2 class="shop-title">Studio</h2>
+          <div class="shop-sub">Plan it, shoot it, ship it.</div>
+        </div>
+      </div>
+      <div class="studio-grid">
+      <div class="studio-main">
+
+      <div class="studio-block">
+        <div class="studio-block-label">1. What's your video about?</div>
+        <div class="tile-row" id="topic-tiles">
+          <button type="button" class="topic-tile" data-value="gaming"><span class="tile-icon"></span><span class="tile-name">Gaming</span></button>
+          <button type="button" class="topic-tile" data-value="tech"><span class="tile-icon"></span><span class="tile-name">Tech</span></button>
+          <button type="button" class="topic-tile" data-value="lifestyle"><span class="tile-icon"></span><span class="tile-name">Lifestyle</span></button>
+          <button type="button" class="topic-tile" data-value="comedy"><span class="tile-icon"></span><span class="tile-name">Comedy</span></button>
+          <button type="button" class="topic-tile" data-value="football"><span class="tile-icon"></span><span class="tile-name">Football</span></button>
+          <button type="button" class="topic-tile" data-value="cooking"><span class="tile-icon"></span><span class="tile-name">Cooking</span></button>
+        </div>
+        <select id="topic-select" class="hidden-select">
+          <option value="gaming">Gaming</option>
+          <option value="comedy">Comedy</option>
+          <option value="football">Football</option>
+          <option value="tech">Tech</option>
+          <option value="lifestyle">Lifestyle</option>
+          <option value="cooking">Cooking</option>
+        </select>
+      </div>
+
+      <div class="studio-block">
+        <div class="studio-block-label">2. Video Format</div>
+        <div class="format-row" id="format-tiles">
+          <button type="button" class="format-tile" data-value="shorts">
+            <span class="ft-name">Shorts</span><span class="ft-sub">~45 sec</span>
+          </button>
+          <button type="button" class="format-tile" data-value="longform">
+            <span class="ft-name">Long-form</span><span class="ft-sub">3&ndash;25 min</span>
+          </button>
+        </div>
+        <select id="format-select" class="hidden-select">
+          <option value="longform" selected>Long-form</option>
+          <option value="shorts">Shorts</option>
+        </select>
+      </div>
+
+      <div class="studio-block">
+        <div class="studio-block-label">3. Video Details</div>
+        <div class="upload-form-grid">
+          <div class="form-field">
+            <label>Length</label>
+            <select id="length-select">
+              <option value="m3">3 min</option>
+              <option value="m8" selected>8 min</option>
+              <option value="m15">15 min</option>
+              <option value="m25">25 min</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label>Editing Effort</label>
+            <select id="effort-select">
+              <option value="quick">Quick Edit</option>
+              <option value="standard" selected>Standard Edit</option>
+              <option value="polished">Polished Edit</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label>Thumbnail Style</label>
+            <select id="thumbnail-select">
+              <option value="shock">Shock</option>
+              <option value="funny">Funny</option>
+              <option value="action">Action</option>
+              <option value="clean" selected>Clean</option>
+              <option value="gameplay">Gameplay</option>
+            </select>
+          </div>
+          <div class="form-field locked" id="ab-field">
+            <label for="ab-thumbnail-select">Thumbnail B <span class="field-tag">A/B test</span></label>
+            <select id="ab-thumbnail-select" disabled>
+              <option value="" selected>No test</option>
+              <option value="shock">Shock</option>
+              <option value="funny">Funny</option>
+              <option value="action">Action</option>
+              <option value="clean">Clean</option>
+              <option value="gameplay">Gameplay</option>
+            </select>
+            <div class="field-hint" id="ab-hint">Unlocks at 100 subscribers.</div>
+          </div>
+          <div class="form-field">
+            <label>Title Style</label>
+            <select id="titlestyle-select">
+              <option value="normal" selected>Normal</option>
+              <option value="curiosity">Curiosity</option>
+              <option value="question">Question</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <button class="upload-btn" id="upload-btn">
+        <svg class="ic" viewBox="0 0 24 24"><path d="M12 19V6M6 12l6-6 6 6"/></svg>
+        Start Creating
+      </button>
+
+      <div class="cooldown-row" id="cooldown-row" style="display:none;">
+        <div class="cooldown-text">Next upload ready in <span id="cooldown-timer">0s</span></div>
+        <button class="ad-skip-btn" id="ad-skip-btn">
+          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><rect x="2.5" y="5.5" width="19" height="13" rx="2"/><path d="M8 19.5h8"/><path d="M10 10.2v3.6l4-1.8z"/></svg>
+          Watch an ad to skip the wait
+        </button>
+      </div>
+      </div>
+
+      <aside class="studio-side">
+        <div class="panel-box preview-panel">
+          <h3>Thumbnail preview</h3>
+          <div class="thumb-preview" id="thumb-preview"></div>
+        </div>
+        <div class="panel-box energy-panel">
+          <div id="studio-energy"></div>
+          <button class="coffee-btn" id="coffee-btn" type="button"></button>
+        </div>
+      </aside>
+      </div>
+    </div>
+
+    <div class="tab-content" id="tab-shop">
+      <div class="shop-head-row">
+        <div>
+          <h2 class="shop-title">Customization</h2>
+          <div class="shop-sub">Upgrade your gear and studio.</div>
+        </div>
+        <div class="shop-balance mono" id="shop-balance">$0</div>
+      </div>
+
+      <div class="shop-tabs content-subtabs" id="shop-tabs">
+        <button type="button" class="shop-tab underline-tab active" data-cat="all">Equipment</button>
+        <button type="button" class="shop-tab underline-tab" data-cat="camera">Camera</button>
+        <button type="button" class="shop-tab underline-tab" data-cat="editing">Software</button>
+        <button type="button" class="shop-tab underline-tab" data-cat="internet">Internet</button>
+        <button type="button" class="shop-tab underline-tab" data-cat="storage">Storage</button>
+      </div>
+
+      <div class="equip-list" id="equip-list"><!-- injected --></div>
+
+      <div class="panel-box">
+        <h3>Coming Soon</h3>
+        <div class="roadmap-grid">
+          <div class="roadmap-item">Gaming PC</div>
+          <div class="roadmap-item">Faster Internet</div>
+          <div class="roadmap-item">Studio Lighting</div>
+          <div class="roadmap-item">Creator Chair</div>
+          <div class="roadmap-item">Second Monitor</div>
+          <div class="roadmap-item">Room Decor</div>
+          <div class="roadmap-item">Office Upgrade</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-content" id="tab-analytics">
+      <div class="content-head-row">
+        <div>
+          <h2 class="shop-title">Analytics</h2>
+          <div class="shop-sub">Track your channel performance.</div>
+        </div>
+        <div class="range-dd">
+          <button class="range-dropdown-btn" type="button" id="an-range-btn" aria-haspopup="listbox">
+            <span id="an-range-label">Last 48 Hours</span>
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="range-menu" id="an-range-menu" role="listbox">
+            <button class="active" data-range="48h">Last 48 Hours</button>
+            <button data-range="7d">Last 7 Days</button>
+            <button data-range="28d">Last 28 Days</button>
+            <button data-range="90d">Last 90 Days</button>
+            <button data-range="life">Lifetime</button>
+          </div>
+        </div>
+      </div>
+
+      <section class="stats-4 an-stats-4">
+        <div class="stat-card plain-stat">
+          <span class="stat-lbl">Views</span>
+          <div class="stat-val mono" id="an-stat-views">0</div>
+          <div class="stat-delta mono" id="an-stat-views-delta"></div>
+        </div>
+        <div class="stat-card plain-stat">
+          <span class="stat-lbl">Watch Time (min)</span>
+          <div class="stat-val mono" id="an-stat-watchtime">0</div>
+          <div class="stat-delta mono" id="an-stat-watchtime-delta"></div>
+        </div>
+        <div class="stat-card plain-stat">
+          <span class="stat-lbl">Subscribers</span>
+          <div class="stat-val mono" id="an-stat-subs">0</div>
+          <div class="stat-delta mono" id="an-stat-subs-delta"></div>
+        </div>
+        <div class="stat-card plain-stat">
+          <span class="stat-lbl">Estimated Revenue</span>
+          <div class="stat-val mono" id="an-stat-revenue">$0.00</div>
+          <div class="stat-delta mono" id="an-stat-revenue-delta"></div>
+        </div>
+      </section>
+
+      <div class="panel-box">
+        <h3 style="margin-bottom:16px;">Views Over Time</h3>
+        <div class="perf-chart-wrap">
+          <div class="perf-y-axis" id="an-y-axis"><!-- injected --></div>
+          <div class="perf-chart-area">
+            <div class="sparkline" id="an-views-sparkline"><!-- injected --></div>
+            <div class="perf-tooltip" id="an-tooltip"></div>
+          </div>
+        </div>
+        <div class="perf-x-axis" id="an-x-axis"><!-- injected --></div>
+        <div class="chart-empty" id="an-chart-empty" style="display:none;">
+          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="width:26px;height:26px"><path d="M4 20V12M9.5 20V6M15 20v-8M20 20V4"/></svg>
+          <div class="ce-title">The chart wakes up once views start rolling in.</div>
+          <div class="ce-sub">Upload from the Studio tab to get your first hour of data.</div>
+        </div>
+      </div>
+
+      <div class="an-duo-grid">
+        <div class="panel-box">
+          <h3>Traffic Sources</h3>
+          <div id="status-donut-card"><!-- injected --></div>
+        </div>
+        <div class="panel-box">
+          <h3>Top Performing Video</h3>
+          <div id="an-top-video-card"><!-- injected --></div>
+        </div>
+      </div>
+
+      <div class="panel-box">
+        <h3><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M3 6.5 12 13l9-6.5"/></svg> Streamly Partner Programme</h3>
+        <div id="spp-status"><!-- injected --></div>
+        <div class="algo-note">Ad revenue only flows once you're accepted — 1,000 subscribers and 4,000 public watch hours.</div>
+      </div>
+      <div class="panel-box">
+        <h3>Algorithm</h3>
+        <div class="meter-row">
+          <div class="meter-top">
+            <div class="meter-label-icon"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span class="name">Audience Retention</span></div>
+            <div class="meter-right"><span class="val" id="stat-retention">0%</span><span class="tag" id="tag-retention"></span></div>
+          </div>
+          <div class="meter-track"><div class="fill" id="fill-retention" style="width:0%"></div></div>
+        </div>
+        <div class="meter-row">
+          <div class="meter-top">
+            <div class="meter-label-icon"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M5 12h14M13 6l6 6-6 6"/></svg><span class="name">Click-Through Rate</span></div>
+            <div class="meter-right"><span class="val" id="stat-ctr">0%</span><span class="tag" id="tag-ctr"></span></div>
+          </div>
+          <div class="meter-track"><div class="fill" id="fill-ctr" style="width:0%"></div></div>
+        </div>
+        <div class="meter-row">
+          <div class="meter-top">
+            <div class="meter-label-icon"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M3 12a9 9 0 0115.5-6.5L21 8M21 3v5h-5"/><path d="M21 12a9 9 0 01-15.5 6.5L3 16M3 21v-5h5"/></svg><span class="name">Upload Consistency</span></div>
+            <div class="meter-right"><span class="val" id="stat-consistency">0%</span><span class="tag" id="tag-consistency"></span></div>
+          </div>
+          <div class="meter-track"><div class="fill" id="fill-consistency" style="width:0%"></div></div>
+        </div>
+        <div class="algo-note">These three feed directly into your channel's overall Algorithm Rating.</div>
+      </div>
+      <div class="panel-box">
+        <h3>Audience Loyalty</h3>
+        <div class="loyalty-list" id="loyalty-list"><!-- injected --></div>
+        <div class="algo-note">Each niche builds its own loyalty. Uploading elsewhere lets your other audiences drift.</div>
+      </div>
+      <div class="panel-box">
+        <h3>Algorithm Learning</h3>
+        <div class="affinity-list" id="affinity-list"><!-- injected --></div>
+        <div class="algo-note">Consistently good performance in a topic earns it a standing recommendation boost.</div>
+      </div>
+      <div class="panel-box">
+        <h3>Milestones</h3>
+        <div class="milestone-list" id="milestone-list"><!-- injected --></div>
+      </div>
+      <div class="panel-box">
+        <h3><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><path d="M8 4h8v5a4 4 0 0 1-8 0V4z"/><path d="M8 5H5a2 2 0 0 0 0 4h1.5M16 5h3a2 2 0 0 1 0 4h-1.5"/><path d="M12 13v3m-3 4h6m-4 0v-4h2v4"/></svg> Achievements</h3>
+        <div class="milestone-list" id="achievement-list"><!-- injected --></div>
+      </div>
+    </div>
+
+    <div class="tab-content" id="tab-monetization">
+      <div class="content-head-row">
+        <div>
+          <h2 class="shop-title">Monetization</h2>
+          <div class="shop-sub">Track your earnings and revenue sources.</div>
+        </div>
+      </div>
+
+      <div class="shop-tabs content-subtabs" id="monetization-subtabs">
+        <button type="button" class="shop-tab underline-tab active" data-msub="overview">Overview</button>
+        <button type="button" class="shop-tab underline-tab" data-msub="ad">Ad Revenue</button>
+        <button type="button" class="shop-tab underline-tab" data-msub="shorts">Shorts</button>
+        <button type="button" class="shop-tab underline-tab" data-msub="sponsor">Sponsorships</button>
+        <button type="button" class="shop-tab underline-tab" data-msub="membership">Memberships</button>
+      </div>
+
+      <div class="an-duo-grid mon-grid">
+        <div class="mon-col">
+          <div class="panel-box">
+            <h3 style="margin-bottom:2px; display:flex; align-items:center; gap:6px;">
+              Estimated Revenue
+              <span class="info-dot" title="Total lifetime earnings across ad revenue, sponsorships and memberships">i</span>
+            </h3>
+            <div class="rev-big mono" id="mon-revenue-big">$0.00</div>
+            <div class="rev-delta mono" id="mon-revenue-delta"></div>
+            <div class="perf-chart-wrap" style="margin-top:6px;">
+              <div class="perf-y-axis" id="mon-y-axis"><!-- injected --></div>
+              <div class="perf-chart-area">
+                <div class="sparkline" id="mon-sparkline"><!-- injected --></div>
+                <div class="perf-tooltip" id="mon-tooltip"></div>
+              </div>
+            </div>
+            <div class="perf-x-axis" id="mon-x-axis"><!-- injected --></div>
+            <div class="chart-empty" id="mon-chart-empty" style="display:none;">
+              <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="width:26px;height:26px"><path d="M12 2v20"/><path d="M17 5.5H9.75a3.25 3.25 0 0 0 0 6.5h4.5a3.25 3.25 0 0 1 0 6.5H6.5"/></svg>
+              <div class="ce-title">No revenue tracked yet in this window.</div>
+              <div class="ce-sub">Revenue appears once ads, sponsors or memberships pay out.</div>
+            </div>
+          </div>
+
+          <div class="panel-box">
+            <h3 class="mon-progress-title">Monetization Progress</h3>
+            <div class="mon-progress-sub">Partner Programme: 1,000 subscribers, then 4,000 long-form watch hours or 250K Shorts views</div>
+            <div id="mon-progress-rows"><!-- injected --></div>
+          </div>
+        </div>
+
+        <div class="mon-col">
+          <div class="panel-box">
+            <h3>Revenue Sources</h3>
+            <div id="mon-sources-list"><!-- injected --></div>
+          </div>
+
+          <div class="panel-box">
+            <h3>Recent Transactions</h3>
+            <div id="mon-transactions-list"><!-- injected --></div>
+          </div>
+        </div>
+      </div>
+      <div id="mon-detail" style="display:none"></div>
+    </div>
+
+    <div class="tab-content" id="tab-feed">
+      <div class="content-head-row">
+        <div>
+          <h2 class="shop-title">Discover</h2>
+          <div class="shop-sub">See what's trending on Streamly.</div>
+        </div>
+        <button class="search-icon-btn" type="button" aria-label="Search">
+          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        </button>
+      </div>
+
+      <div class="shop-tabs content-subtabs" id="discover-subtabs">
+        <button type="button" class="shop-tab underline-tab active" data-dsub="foryou">For You</button>
+        <button type="button" class="shop-tab underline-tab" data-dsub="trending">Trending</button>
+        <button type="button" class="shop-tab underline-tab" data-dsub="gaming">Gaming</button>
+        <button type="button" class="shop-tab underline-tab" data-dsub="tech">Tech</button>
+        <button type="button" class="shop-tab underline-tab" data-dsub="entertainment">Entertainment</button>
+      </div>
+
+      <div class="discover-grid">
+        <div class="discover-col" id="discover-feed-list"><!-- injected --></div>
+
+        <div class="discover-side">
+          <div class="panel-box">
+            <div class="card-head-row">
+              <h3 style="margin:0;"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><path d="M12 2c1 4-3 5-3 9a5.5 5.5 0 0011 0c0-2-1-3.5-1-3.5S17 9 16 9.5C16.5 7 14 3 12 2z"/></svg> Trending Topics</h3>
+              <a class="full-analytics-link" href="javascript:void(0)">View more
+                <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px"><path d="M9 6l6 6-6 6"/></svg>
+              </a>
+            </div>
+            <div id="discover-trending-topics"><!-- injected --></div>
+          </div>
+
+          <div class="panel-box collab-panel">
+            <h3>Collabs</h3>
+            <div class="collab-intro">Film with a bigger creator to borrow their audience. Their viewers might follow you over, or shrug.</div>
+            <div id="collab-list"><!-- injected --></div>
+          </div>
+
+          <div class="panel-box">
+            <h3>Who to Follow</h3>
+            <div id="who-to-follow-list"><!-- injected --></div>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="section-head" style="margin-top:22px;">
+        <h2>Activity Feed</h2>
+      </div>
+      <div class="feed-list" id="creator-feed-list"><!-- injected --></div>
+    </div>
+
+    <div class="tab-content" id="tab-settings">
+      <div class="content-head-row">
+        <div>
+          <h2 class="shop-title">Settings</h2>
+          <div class="shop-sub">Your channel, your level, your preferences.</div>
+        </div>
+      </div>
+      <div class="settings-grid">
+        <div class="settings-col">
+          <div class="panel-box">
+            <h3>Creator Level</h3>
+            <div id="settings-level"></div>
+          </div>
+          <div class="panel-box">
+            <h3>Channel</h3>
+            <div class="set-row">
+              <div><div class="set-name">Channel name</div><div class="set-sub">Shown on your videos and in the feed</div></div>
+              <div class="set-inline"><input class="setup-input small" id="set-name-input" maxlength="24" placeholder="My Channel"><button class="mini-btn" id="set-name-save">Save</button></div>
+            </div>
+            <div id="settings-stats" class="set-stats"></div>
+          </div>
+        </div>
+        <div class="settings-col">
+          <div class="panel-box">
+            <h3>Audio</h3>
+            <div class="set-row">
+              <div><div class="set-name">Sound effects</div><div class="set-sub">Clicks, coins, level ups</div></div>
+              <button class="switch" id="set-sound" role="switch" aria-checked="true"><span></span></button>
+            </div>
+            <div class="set-row">
+              <div><div class="set-name">Music</div></div>
+              <button class="switch" id="set-music" role="switch" aria-checked="true"><span></span></button>
+            </div>
+          </div>
+          <div class="panel-box">
+            <h3>Ads</h3>
+            <div class="set-row">
+              <div><div class="set-name">Rewarded ads</div><div class="set-sub" id="set-ad-provider">House ads</div></div>
+            </div>
+            <div class="set-note">Watching an ad can skip an upload wait, double what you earned while away, or add 1GB of data. Up to 12 a day.</div>
+          </div>
+          <div class="panel-box">
+            <h3>Tutorial</h3>
+            <div class="set-row">
+              <div><div class="set-name">Guided tour</div><div class="set-sub">A one-minute walkthrough of every tab</div></div>
+              <button class="mini-btn" id="replay-tutorial">Replay tour</button>
+            </div>
+          </div>
+          <div class="panel-box">
+            <h3>Save data</h3>
+            <div class="set-note">Progress saves automatically in this browser.</div>
+            <div class="set-actions">
+              <button class="mini-btn" id="export-save">Export save file</button>
+              <button class="mini-btn danger" id="reset-save">Delete save</button>
+            </div>
+          </div>
+          <div class="set-about">Streamly Sim v0.7 · AetherEdge Studios · <a href="/privacy" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">Privacy</a></div>
+        </div>
+      </div>
+    </div>
+
+      </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="modal-overlay" id="setup-modal">
+    <div class="modal-box">
+      <h3>Welcome to Streamly Sim</h3>
+      <div class="away-time">What's your channel called?</div>
+      <input type="text" id="channel-name-input" class="setup-input" placeholder="e.g. CrashOut Gaming" maxlength="24" autocomplete="off">
+      <button class="modal-close" id="start-channel-btn">Start Channel</button>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="offline-modal">
+    <div class="modal-box">
+      <h3>Welcome back</h3>
+      <div class="away-time" id="away-time">You were away for 0m</div>
+      <div class="modal-stats">
+        <div class="modal-stat views"><span class="n" id="off-views">+0</span><span class="l">Views</span></div>
+        <div class="modal-stat subs"><span class="n" id="off-subs">+0</span><span class="l">Subs</span></div>
+        <div class="modal-stat money"><span class="n" id="off-money">+$0</span><span class="l">Revenue</span></div>
+      </div>
+      <button class="modal-close secondary" id="offline-double" type="button">Watch an ad to double subs and revenue</button>
+      <button class="modal-close" id="offline-close">Nice</button>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="partner-modal">
+    <div class="modal-box">
+      <h3><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;vertical-align:-3px"><path d="M12 3l2.4 4.9 5.4.8-3.9 3.8.9 5.4-4.8-2.5-4.8 2.5.9-5.4L4.2 8.7l5.4-.8z"/></svg> Congratulations!</h3>
+      <div class="away-time">Your application to the Streamly Partner Programme has been approved.</div>
+      <div class="algo-note" style="margin:0 0 16px 0; padding:0; border:none; text-align:center;">Ads are now enabled on your channel — every upload from now on can earn real revenue.</div>
+      <button class="modal-close" id="partner-close">Let's go</button>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="delete-confirm-modal">
+    <div class="modal-box">
+      <h3>Delete this video? <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;vertical-align:-2px"><path d="M4 7h16"/><path d="M9 7V4.5a1 1 0 011-1h4a1 1 0 011 1V7"/><path d="M6 7l1 13a1 1 0 001 1h8a1 1 0 001-1l1-13"/></svg></h3>
+      <div class="away-time" id="delete-confirm-title">This can't be undone.</div>
+      <div class="modal-btn-row">
+        <button class="modal-close cancel" id="delete-cancel-btn">Cancel</button>
+        <button class="modal-close confirm-delete" id="delete-confirm-btn">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="ad-modal" role="dialog" aria-modal="true" aria-label="Sponsored message">
+    <div class="modal-box ad-box">
+      <div class="ad-top"><span class="ad-label">Sponsored</span><span class="ad-count" id="ad-countdown">15s</span></div>
+      <div class="ad-stage">
+        <div class="ad-brand">Voltwave</div>
+        <div class="ad-line">The energy drink for 3 AM edits.</div>
+        <div class="ad-can" aria-hidden="true"></div>
+      </div>
+      <div class="ad-progress"><div id="ad-bar"></div></div>
+      <button class="modal-close" id="ad-claim" disabled>Reward unlocks when the ad ends</button>
+      <button class="ad-close" id="ad-close" type="button">Skip (no reward)</button>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="notif-modal">
+    <div class="modal-box notif-box">
+      <h3>Notifications</h3>
+      <div class="notif-scroll" id="notif-modal-list"></div>
+      <button class="modal-close" id="notif-close">Close</button>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="video-modal">
+    <div class="modal-box video-box">
+      <div class="va-top"><h3>Video analytics</h3><button class="icon-btn" id="video-modal-close" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+      <div id="video-modal-body"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="thumbs.js"></script>
+  <script src="music.js"></script>
+  <script src="ads.js"></script>
+  <script src="tutorial.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>

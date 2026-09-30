@@ -1,0 +1,13 @@
+{
+  "name": "Streamly Sim",
+  "short_name": "Streamly",
+  "description": "Build a channel from zero. Chase the algorithm. Try not to burn out.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#0f2527",
+  "theme_color": "#0f2527",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
