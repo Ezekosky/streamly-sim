@@ -1585,10 +1585,13 @@ function maybeTriggerEvent(){
 
   const activeVideos = state.videos.filter(v => v.outcomeDecided);
   const roll = Math.random();
+  // Every event scales with the channel. A 20-sub channel gets small bumps, not a free career.
+  const liveCount = state.videos.filter(v => !v.publishPhase || v.publishPhase === 'live').length;
+  const countEventSubs = (n) => { state.daySubs += n; state.currentHourSubs += n; };
 
   if (roll < 0.22 && activeVideos.length){
     const v = activeVideos[Math.floor(Math.random() * activeVideos.length)];
-    const bonus = Math.max(1000, v.rate * 12);
+    const bonus = Math.round(Math.max(v.rate * 12, v.views * rand(0.4, 1.1), 40 + state.subs * rand(0.3, 1.2)));
     v.rateCeiling = Math.max(v.rateCeiling, v.views + bonus * 1.5);
     v.views += bonus;
     v.rate = Math.max(v.rate, bonus / 20);
@@ -1601,12 +1604,13 @@ function maybeTriggerEvent(){
       state.adRevenueTotal += earned1;
       v.revenueEarned = (v.revenueEarned || 0) + earned1;
     }
-    applyFractionalSubs(bonus * subConversionRate(v));
+    state.dayViews += bonus; state.currentHourViews += bonus;
+    countEventSubs(applyFractionalSubs(Math.min(bonus * subConversionRate(v), 20 + state.subs * 0.04))); // capped: a spike brings viewers, not a whole new audience
     showToast(ic('fire') + ` Trending! "${v.title}" just got a viral moment — +${fmt(bonus)} views`, true);
 
   } else if (roll < 0.44 && activeVideos.length){
     const v = activeVideos[Math.floor(Math.random() * activeVideos.length)];
-    const bonus = rand(1500, 6000);
+    const bonus = Math.round((60 + state.subs * rand(0.5, 2)) * rand(0.8, 1.3));
     v.views += bonus;
     state.totalViews += bonus;
     if (state.isMonetized && v.format !== 'shorts'){
@@ -1616,7 +1620,8 @@ function maybeTriggerEvent(){
       state.adRevenueTotal += earned2;
       v.revenueEarned = (v.revenueEarned || 0) + earned2;
     }
-    applyFractionalSubs(bonus * subConversionRate(v));
+    state.dayViews += bonus; state.currentHourViews += bonus;
+    countEventSubs(applyFractionalSubs(Math.min(bonus * subConversionRate(v), 20 + state.subs * 0.04))); // capped: a spike brings viewers, not a whole new audience
     state.algoRating = clamp(state.algoRating - 5, 0, 100);
     showToast(ic('alert') + ` Controversy around "${v.title}" — views spiked, rating took a hit`, true);
 
@@ -1628,10 +1633,14 @@ function maybeTriggerEvent(){
     pushTransaction('sponsor', 'Sponsorship Payment', amount);
     showToast(ic('gift') + ` Brand deal landed — +$${amount.toFixed(2)}`, true);
 
-  } else {
-    const subBonus = Math.floor(rand(80, 500));
+  } else if (roll >= 0.9 && liveCount >= 3){
+    // Rare. A shout-out brings a trickle to a tiny channel (15-35) and ~2-8% more to an established one.
+    const subBonus = Math.floor(rand(15, 35) + state.subs * rand(0.02, 0.08));
     state.subs += subBonus;
-    showToast(ic('star') + ` A celebrity shared your channel! +${fmt(subBonus)} subscribers`, true);
+    countEventSubs(subBonus);
+    showToast(ic('star') + ` A bigger creator shared your channel! +${fmt(subBonus)} subscribers`, true);
+  } else {
+    return; // nothing happened this time
   }
 
   renderStats();
@@ -2352,7 +2361,7 @@ function renderHome(){
       const currentDay = Math.floor(totalMinNow / DAY_TICKS) + 1;
       const xLabels = [];
       const step = days <= 7 ? 1 : days <= 28 ? 4 : 15;
-      for (let i = days - 1; i >= 0; i -= step) xLabels.push('Day ' + Math.max(1, currentDay - i));
+      for (let i = days - 1; i >= 0; i -= step) xLabels.push(currentDay - i >= 1 ? 'Day ' + (currentDay - i) : '');
       if (xLabels[xLabels.length - 1] !== 'Day ' + currentDay) xLabels.push('Day ' + currentDay);
       xAxisEl.innerHTML = xLabels.map(l => `<span>${l}</span>`).join('');
     }
