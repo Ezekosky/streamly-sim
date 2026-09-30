@@ -221,6 +221,7 @@ const XP_RULES = [
   { key: 'achieve',   label: 'Achievement',                xp: '+150' },
   { key: 'collab',    label: 'Collab goes live',           xp: '+120' },
   { key: 'abtest',    label: 'A/B test resolved',          xp: '+30' },
+  { key: 'live',      label: 'Go live',                    xp: '+60, then +1 per 5 peak viewers' },
 ];
 const XP_UPLOAD = { quick: 25, standard: 40, polished: 60 };
 const LEVEL_CASH_BONUS = level => 25 * level;
@@ -519,6 +520,8 @@ let state = {
   hourlySubs: [], hourlyWatch: [], currentHourSubs: 0, currentHourWatch: 0,
   fanFunding: false,
   tutorialDone: false,
+  live: null,              // the stream in progress, if any
+  streamCount: 0, bestStreamPeak: 0, superChatRevenue: 0,
   lfWatchHours: 0,          // long-form watch hours only (Partner Programme path 1)
   shortsRevenueTotal: 0, pendingShortsRevenue: 0,
   playlists: [],            // [{ id, name, videoIds }]
@@ -1175,7 +1178,8 @@ function videoThumb(v){
     face: state.channelName || 'me',
     guestFace: v.collab ? v.collab.name : null,
   }) + (v.ab && !v.ab.resolved ? `<span class="thumb-tag ab">A/B</span>` : '')
-     + (v.format === 'shorts' ? `<span class="thumb-tag shorts">Short</span>` : '');
+     + (v.format === 'shorts' ? `<span class="thumb-tag shorts">Short</span>` : '')
+     + (v.isVod ? `<span class="thumb-tag vod">Stream</span>` : '');
 }
 function thumbFace(seed){ return faceSVG(seed); }
 /* legacy gradient kept only as a fallback background behind the SVG */
@@ -1406,6 +1410,7 @@ function liveTick(){
 
   advanceGlobalTicks(1);
   if (state.uploadCooldownTicksLeft > 0) state.uploadCooldownTicksLeft--;
+  if (state.live){ tickLiveStream(); renderLivePill(); }
   if (hypeMusicUntil && Date.now() > hypeMusicUntil){
     hypeMusicUntil = 0;
     if (window.Music) Music.setMood('calm');
@@ -1936,11 +1941,8 @@ function renderVideos(){
     return;
   }
   playlistsRenderedAt = 0;
-  if (contentSubTab === 'live'){
-    listEl.innerHTML = pipelineHTML + `<div class="empty-hint">Live streaming isn't part of Streamly Sim yet.</div>`;
-    if (pagerEl) pagerEl.innerHTML = '';
-    return;
-  }
+  if (contentSubTab === 'live'){ renderLiveTab(); return; }
+  liveUIBuiltFor = null; // leaving the live tab: rebuild it fresh next time
 
   if (liveVideos.length === 0 && pipeline.length === 0){
     listEl.innerHTML = `<div class="empty-hint">No uploads yet. Head to the Studio tab and post your first video.</div>`;
@@ -2688,10 +2690,11 @@ function renderMonetizationDetail(el){
 const MON_SOURCE_META = {
   ad:         { label: 'Ad Revenue',         icon: 'tv',       field: 'adRevenueTotal' },
   shorts:     { label: 'Shorts Feed',        icon: 'shorts',   field: 'shortsRevenueTotal' },
+  superchat:  { label: 'Super Chats',        icon: 'chat',     field: 'superChatRevenue' },
   sponsor:    { label: 'Sponsorships',       icon: 'gift',     field: 'sponsorshipRevenue' },
   membership: { label: 'Memberships',        icon: 'medal',    field: 'membershipRevenue' },
 };
-const MON_TX_ICON = { ad: 'tv', shorts: 'shorts', sponsor: 'gift', membership: 'medal', collab: 'users' };
+const MON_TX_ICON = { ad: 'tv', shorts: 'shorts', superchat: 'chat', sponsor: 'gift', membership: 'medal', collab: 'users' };
 
 function renderMonetization(){
   const bigEl = document.getElementById('mon-revenue-big');
@@ -2770,7 +2773,7 @@ function renderMonetization(){
   const sourcesEl = document.getElementById('mon-sources-list');
   if (sourcesEl){
     const total = Math.max(0.01, state.lifetimeRevenue);
-    sourcesEl.innerHTML = Object.entries(MON_SOURCE_META).map(([key, meta]) => {
+    sourcesEl.innerHTML = Object.entries(MON_SOURCE_META).filter(([key]) => key !== 'superchat' || LIVE_ENABLED).map(([key, meta]) => {
       const amount = state[meta.field] || 0;
       const pctOfTotal = Math.round((amount / total) * 1000) / 10;
       return `
@@ -3301,6 +3304,7 @@ function renderCreatorFeed(){
    ========================================================================= */
 function performUpload(o){
   if (state.uploadCooldownTicksLeft > 0) return null;
+  if (state.live){ playErrorSound(); showToast(ic('tv') + " You're live right now. End the stream before uploading."); return null; }
   const { topicKey, thumbKey, lengthKey, effortKey, titleStyleKey, formatKey } = o;
   const abThumb = o.abThumb && o.abThumb !== thumbKey ? o.abThumb : '';
 
@@ -3562,7 +3566,7 @@ function renderSettings(){
     <div class="xp-track big"><div class="xp-fill" style="width:${pct}%"></div></div>
     <div class="lvl-sub">${next ? `${fmt(next.xp - state.xp)} XP to level ${info.level + 1} · every level pays a $${LEVEL_CASH_BONUS(info.level + 1)} bonus` : 'You have maxed out the creator ladder.'}</div>
     <div class="xp-table">
-      ${XP_RULES.map(r => `<div class="xp-row"><span>${r.label}</span><span class="xp-rate">${r.xp}</span><span class="xp-earned">${log[r.key] ? fmt(log[r.key]) + ' earned' : ''}</span></div>`).join('')}
+      ${XP_RULES.filter(r => r.key !== 'live' || LIVE_ENABLED).map(r => `<div class="xp-row"><span>${r.label}</span><span class="xp-rate">${r.xp}</span><span class="xp-earned">${log[r.key] ? fmt(log[r.key]) + ' earned' : ''}</span></div>`).join('')}
     </div>`;
   const nameIn = document.getElementById('set-name-input');
   if (nameIn && document.activeElement !== nameIn) nameIn.value = state.channelName || '';
@@ -3608,7 +3612,9 @@ function showToast(msg, isEvent){
 }
 
 /* ---------- Save / load ---------- */
+let saveBlocked = false; // set while deleting a save, so the unload/interval autosave can't write it back
 function saveState(){
+  if (saveBlocked) return;
   state.lastSaved = Date.now();
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify(state));
@@ -3644,6 +3650,27 @@ function sanitizeState(){
   if (typeof state.ispThrottled !== 'boolean') state.ispThrottled = false;
   if (typeof state.isMonetized !== 'boolean') state.isMonetized = false;
   if (typeof state.fanFunding !== 'boolean') state.fanFunding = false;
+  if (state.live && (typeof state.live !== 'object' || !TOPICS[state.live.topic])) state.live = null;
+  state.streamCount = num(state.streamCount, 0);
+  state.bestStreamPeak = num(state.bestStreamPeak, 0);
+  state.superChatRevenue = num(state.superChatRevenue, 0);
+  // One-time recount for saves made after per-video subscriber tracking existed: subscribers the
+  // old flat "celebrity shout-out" event handed out (80-500 at a time) are trimmed to what the
+  // channel actually earned plus a fair allowance for shout-outs under the new rules.
+  if (!state.subRecount1){
+    state.subRecount1 = true;
+    const vids = state.videos || [];
+    const tracked = vids.length > 0 && vids.every(v => typeof v.subsRaw === 'number' && (v.views < 200 || v.subsRaw >= v.views * 0.0003));
+    if (tracked && state.subs < 20000){
+      const organic = vids.reduce((a, v) => a + v.subsRaw + (v.collab && v.collab.gained ? v.collab.gained : 0), 0);
+      const fair = Math.round(organic * 1.25 + 40);
+      if (state.subs > fair + 50){
+        const removed = state.subs - fair;
+        state.subs = fair;
+        if (Array.isArray(state.notifications)) state.notifications.unshift({ text: ic('users') + ` Subscriber recount: ${fmt(removed)} subscribers from an old shout-out bug were removed. Your channel now reflects what your videos earned.`, tick: state.totalTicks });
+      }
+    }
+  }
   if (typeof state.tutorialDone !== 'boolean'){
     // Existing players aren't forced through the tour; they get told it exists.
     state.tutorialDone = true;
@@ -4054,9 +4081,19 @@ function startGame(hadSave){
     showToast(ic('check') + ` Channel renamed to ${v}`);
     safeRenderAll();
   });
+  // Delete save: an in-game confirm (browser confirm() is blocked inside some embeds, e.g. itch.io)
   document.getElementById('reset-save').addEventListener('click', () => {
-    if (!confirm('Delete this channel and start over? This cannot be undone.')) return;
+    playClickSound();
+    document.getElementById('reset-modal').classList.add('show');
+  });
+  document.getElementById('reset-cancel').addEventListener('click', () => {
+    playClickSound();
+    document.getElementById('reset-modal').classList.remove('show');
+  });
+  document.getElementById('reset-confirm').addEventListener('click', () => {
+    saveBlocked = true;                                   // stop every autosave path first
     try { localStorage.removeItem(SAVE_KEY); } catch(e){}
+    window.removeEventListener('beforeunload', saveState);
     location.reload();
   });
   document.getElementById('replay-tutorial').addEventListener('click', () => { if (window.Tutorial) Tutorial.start(); });
@@ -4117,6 +4154,8 @@ function startGame(hadSave){
   // error is caught and logged instead of aborting the rest of startup.
   seedRivalUploads();
   syncPlaylistBoosts();
+  initLiveUI();
+  if (state.live) endLiveStream(true); // the game was closed mid-stream: wrap it up with what it had
   safeRenderAll();
   if (hadSave) runOfflineProgress();
   safeRenderAll();

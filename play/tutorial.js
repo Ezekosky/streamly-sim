@@ -33,6 +33,9 @@
     { tab: 'content', target: '#content-subtabs',
       title: 'Your videos',
       body: 'Every upload lands here. Tap a video to see its comments and open its analytics. Playlists live here too; videos in a playlist pick up extra views.' },
+    { tab: 'content', target: '[data-sub="live"]', needsLive: true,
+      title: 'Go live',
+      body: 'At 50 subscribers you can stream. Viewers drop in and out, chat reacts, and once you reach Partner Programme tier 1 they can send Super Chats. Streams cost a lot of energy.' },
     { tab: 'analytics', target: '#spp-status',
       title: 'Getting paid',
       body: 'You earn nothing from views until you join the Partner Programme. Tier 1 (500 subs) unlocks memberships. Tier 2 (1,000 subs) unlocks ad money. Track your progress here.' },
@@ -54,6 +57,7 @@
   ];
 
   let idx = 0, active = false, onDone = null;
+  let S = STEPS; // the steps for this run (steps for switched-off features are dropped)
   let overlay, hole, card;
 
   function build(){
@@ -90,15 +94,15 @@
   }
 
   function go(i){
-    if (i >= STEPS.length){ end(false); return; }
+    if (i >= S.length){ end(false); return; }
     if (i < 0) return;
     idx = i;
-    const s = STEPS[idx];
+    const s = S[idx];
     try { if (typeof playClickSound === 'function') playClickSound(); } catch(e){}
     if (s.tab && typeof switchTab === 'function') switchTab(s.tab);
     const el = s.target ? document.querySelector(s.target) : null;
     if (el) el.scrollIntoView({ block: 'center', behavior: 'instant' });
-    overlay.querySelector('.tut-step').textContent = `${idx + 1} of ${STEPS.length}`;
+    overlay.querySelector('.tut-step').textContent = `${idx + 1} of ${S.length}`;
     overlay.querySelector('.tut-title').textContent = s.title;
     overlay.querySelector('.tut-body').textContent = s.body;
     overlay.querySelector('.tut-back').style.visibility = idx === 0 ? 'hidden' : 'visible';
@@ -108,7 +112,7 @@
   }
 
   function place(){
-    const s = STEPS[idx];
+    const s = S[idx];
     const el = s.target ? document.querySelector(s.target) : null;
     const vw = window.innerWidth, vh = window.innerHeight;
     const pad = 8;
@@ -136,6 +140,7 @@
   }
 
   function start(done){
+    S = STEPS.filter(st => !st.needsLive || (typeof LIVE_ENABLED !== 'undefined' && LIVE_ENABLED));
     build();
     onDone = done || null;
     active = true;
