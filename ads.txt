@@ -1,0 +1,2 @@
+# Replace the line below with the exact line AdSense gives you (Sites > your site > ads.txt), then redeploy.
+# google.com, pub-XXXXXXXXXXXXXXXX, DIRECT, f08c47fec0942fa0

@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Streamly Sim — build a channel from zero</title>
+<meta name="description" content="A free creator-life sim in your browser. Pick topics, chase the algorithm, get into the Partner Programme and try not to burn out. By AetherEdge Studios.">
+<meta name="theme-color" content="#0a0a0a">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="canonical" href="https://YOUR-DOMAIN.com/">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Streamly Sim — build a channel from zero">
+<meta property="og:description" content="A free creator-life sim in your browser. Your first videos will flop. That's the point.">
+<meta property="og:image" content="/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<!-- ADSENSE SITE VERIFICATION: when AdSense gives you its code snippet, paste it here, e.g.
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-XXXXXXXXXXXXXXXX" crossorigin="anonymous"></script>
+-->
+<style>
+  :root{
+    --bg:#0a0a0a; --surface:#141414; --surface-2:#1c1c1c; --border:#262626;
+    --text:#fafafa; --dim:#a1a1a1; --faint:#6b6b6b; --accent:#3b82f6; --brand:#ff0033; --gain:#22c55e;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html{ scroll-behavior:smooth; }
+  body{ background:var(--bg); color:var(--text); font-family:Inter, "Segoe UI", system-ui, sans-serif; line-height:1.5; -webkit-font-smoothing:antialiased; }
+  a{ color:inherit; text-decoration:none; }
+  .wrap{ max-width:1120px; margin:0 auto; padding:0 24px; }
+
+  /* nav */
+  nav{ position:sticky; top:0; z-index:10; background:rgba(10,10,10,.85); backdrop-filter:blur(10px); border-bottom:1px solid #1a1a1a; }
+  nav .wrap{ display:flex; align-items:center; justify-content:space-between; height:64px; }
+  .logo{ display:flex; align-items:center; gap:10px; font-weight:700; font-size:17px; letter-spacing:-.01em; }
+  .logo-mark{ width:30px; height:30px; border-radius:8px; background:var(--brand); display:flex; align-items:center; justify-content:center; }
+  .logo-mark svg{ width:14px; height:14px; fill:#fff; }
+  .logo em{ font-style:normal; color:var(--faint); font-weight:600; }
+  .nav-links{ display:flex; gap:26px; align-items:center; font-size:14px; color:var(--dim); }
+  .nav-links a:hover{ color:var(--text); }
+  .btn{ display:inline-flex; align-items:center; gap:8px; font-weight:600; font-size:14px; border-radius:99px; padding:11px 20px; transition:background .15s, transform .1s; }
+  .btn:active{ transform:translateY(1px); }
+  .btn-primary{ background:#fff; color:#0a0a0a; }
+  .btn-primary:hover{ background:#e6e6e6; }
+  .btn-ghost{ border:1px solid var(--border); color:var(--text); }
+  .btn-ghost:hover{ background:var(--surface-2); }
+  .btn svg{ width:15px; height:15px; }
+
+  /* hero */
+  .hero{ padding:88px 0 56px; display:grid; grid-template-columns:minmax(0,1.05fr) minmax(0,1fr); gap:48px; align-items:center; }
+  .eyebrow{ display:inline-flex; align-items:center; gap:8px; font-size:13px; color:var(--dim); margin-bottom:22px; }
+  .rec{ width:8px; height:8px; border-radius:50%; background:var(--brand); animation:blink 1.6s steps(1) infinite; }
+  @keyframes blink{ 50%{ opacity:.2; } }
+  h1{ font-size:clamp(40px, 5.6vw, 64px); line-height:1.04; letter-spacing:-.035em; font-weight:800; }
+  h1 .quiet{ color:var(--faint); }
+  .lede{ font-size:18px; color:var(--dim); margin:22px 0 32px; max-width:30em; }
+  .cta{ display:flex; gap:12px; flex-wrap:wrap; }
+  .meta{ margin-top:22px; font-size:13px; color:var(--faint); }
+
+  /* live thumbnail wall */
+  .wall{ position:relative; height:440px; overflow:hidden; border-radius:16px; mask-image:linear-gradient(180deg, transparent, #000 14%, #000 86%, transparent); -webkit-mask-image:linear-gradient(180deg, transparent, #000 14%, #000 86%, transparent); }
+  .wall-cols{ display:grid; grid-template-columns:1fr 1fr; gap:12px; height:100%; }
+  .wall-col{ display:flex; flex-direction:column; gap:12px; animation:rise 60s linear infinite; }
+  .wall-col.b{ animation-duration:75s; animation-direction:reverse; }
+  @keyframes rise{ to{ transform:translateY(-50%); } }
+  .wt{ position:relative; aspect-ratio:16/9; border-radius:10px; overflow:hidden; background:var(--surface-2); flex:none; }
+  .wt svg{ position:absolute; inset:0; width:100%; height:100%; display:block; }
+  .wt .dur{ position:absolute; right:6px; bottom:6px; background:rgba(0,0,0,.8); font-size:11px; font-weight:500; padding:2px 5px; border-radius:4px; font-variant-numeric:tabular-nums; }
+
+  /* features */
+  section{ padding:72px 0; border-top:1px solid #161616; }
+  h2{ font-size:clamp(28px, 3.4vw, 38px); letter-spacing:-.025em; font-weight:700; line-height:1.15; }
+  .sub{ color:var(--dim); margin-top:10px; font-size:16px; max-width:36em; }
+  .grid{ display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:14px; margin-top:36px; }
+  .card{ background:var(--surface); border:1px solid #1d1d1d; border-radius:14px; padding:22px; }
+  .card .ic{ width:36px; height:36px; border-radius:9px; background:var(--surface-2); display:flex; align-items:center; justify-content:center; margin-bottom:16px; color:var(--dim); }
+  .card .ic svg{ width:18px; height:18px; }
+  .card h3{ font-size:16px; font-weight:600; margin-bottom:6px; }
+  .card p{ font-size:14px; color:var(--dim); }
+
+  /* numbers band */
+  .band{ display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:14px; margin-top:36px; }
+  .stat{ padding:20px 22px; border-radius:14px; border:1px solid #1d1d1d; }
+  .stat b{ display:block; font-size:30px; letter-spacing:-.02em; font-weight:700; font-variant-numeric:tabular-nums; }
+  .stat span{ font-size:13px; color:var(--faint); }
+
+  /* closing */
+  .closing{ text-align:center; padding:96px 0; }
+  .closing .lede{ margin:16px auto 30px; }
+  .closing .cta{ justify-content:center; }
+
+  footer{ border-top:1px solid #161616; padding:28px 0 40px; font-size:13px; color:var(--faint); }
+  footer .wrap{ display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+  footer a:hover{ color:var(--text); }
+  .studio{ color:var(--dim); font-weight:500; }
+
+  @media (max-width:900px){
+    .hero{ grid-template-columns:1fr; padding-top:56px; }
+    .wall{ height:300px; }
+    .grid{ grid-template-columns:1fr; }
+    .band{ grid-template-columns:1fr 1fr; }
+    .nav-links .hide-sm{ display:none; }
+  }
+  @media (prefers-reduced-motion: reduce){ .wall-col, .rec{ animation:none; } html{ scroll-behavior:auto; } }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <a class="logo" href="/"><span class="logo-mark"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg></span>Streamly<em>Sim</em></a>
+    <div class="nav-links">
+      <a class="hide-sm" href="#features">Features</a>
+      <a class="hide-sm" href="/privacy">Privacy</a>
+      <a class="btn btn-primary" href="/play/">Play free</a>
+    </div>
+  </div>
+</nav>
+
+<main class="wrap">
+  <div class="hero">
+    <div>
+      <div class="eyebrow"><span class="rec"></span>Free browser game · desktop and mobile (landscape)</div>
+      <h1>Build a channel<br>from zero.<br><span class="quiet">Try not to burn out.</span></h1>
+      <p class="lede">Streamly Sim is a creator-life simulator. Pick your topics, design thumbnails, read your analytics, and fight your way into the Partner Programme. Your first videos will flop. That's the point.</p>
+      <div class="cta">
+        <a class="btn btn-primary" href="/play/"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>Play now, it's free</a>
+        <a class="btn btn-ghost" href="https://aetheredge-studios.itch.io/" target="_blank" rel="noopener">Also on itch.io</a>
+      </div>
+      <div class="meta">No download, no sign-up. Progress saves in your browser.</div>
+    </div>
+    <div class="wall" aria-hidden="true">
+      <div class="wall-cols"><div class="wall-col a" id="col-a"></div><div class="wall-col b" id="col-b"></div></div>
+    </div>
+  </div>
+</main>
+
+<section id="features">
+  <div class="wrap">
+    <h2>Every video has a life of its own.</h2>
+    <p class="sub">Nothing is scripted. Click-through rate, retention, likes and comments keep moving after you post, and the algorithm decides how far each upload travels.</p>
+    <div class="grid">
+      <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 3.5v17h17"/><path d="M8 16v-4M13 16V8M18 16V5"/></svg></div><h3>Start at zero</h3><p>New channels grow slowly. A breakout hit is possible early on, but rare. The bigger you get, the easier it gets.</p></div>
+      <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M10 9.5v5l4.5-2.5z"/></svg></div><h3>Make every upload</h3><p>Choose topic, format, length, editing effort, thumbnail and title style. A/B test thumbnails once you grow.</p></div>
+      <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M15 9.2c-.6-.9-1.7-1.4-3-1.4-1.9 0-3 .9-3 2.1 0 3 6.2 1.6 6.2 4.4 0 1.3-1.3 2.2-3.2 2.2-1.4 0-2.6-.6-3.2-1.6M12 6v1.8M12 16.3V18"/></svg></div><h3>Earn it properly</h3><p>No money until you're in the Partner Programme. Tier 1 unlocks memberships, tier 2 unlocks ads and Shorts revenue.</p></div>
+      <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.6 19.6c.7-3 3-4.6 5.4-4.6s4.7 1.6 5.4 4.6"/><path d="M16.2 5.2a3.2 3.2 0 0 1 0 5.8M17.6 15.4c1.8.5 3 1.9 3.4 4.2"/></svg></div><h3>Rivals and collabs</h3><p>Other creators grow alongside you. Get big enough and pitch a collab to borrow their audience. It might flop.</p></div>
+      <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13.2 2.5 4.8 13.4h5.9L9.8 21.5l8.9-11.2h-6z"/></svg></div><h3>Energy is real</h3><p>Every upload costs energy. Push too hard and your videos get worse. Burn out and recovery slows right down.</p></div>
+      <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3.6 2.5 5.1 5.6.8-4.1 4 1 5.6-5-2.7-5 2.7 1-5.6-4.1-4 5.6-.8z"/></svg></div><h3>Level up to 30</h3><p>Uploads, views, subscribers and viral hits all earn XP, and the game shows exactly what earns what.</p></div>
+    </div>
+    <div class="band">
+      <div class="stat"><b>6</b><span>topics with their own audiences</span></div>
+      <div class="stat"><b>30</b><span>creator levels</span></div>
+      <div class="stat"><b>~150</b><span>viewer comments</span></div>
+      <div class="stat"><b>0</b><span>downloads needed</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="closing">
+  <div class="wrap">
+    <h2>Your first upload is waiting.</h2>
+    <p class="lede">A one-minute tour shows you everything. Then it's you and the algorithm.</p>
+    <div class="cta"><a class="btn btn-primary" href="/play/">Start your channel</a></div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div>© 2026 <span class="studio">AetherEdge Studios</span>. Streamly Sim is a work of fiction; all channels and creators in it are made up.</div>
+    <div><a href="/privacy">Privacy</a></div>
+  </div>
+</footer>
+
+<script src="/play/thumbs.js"></script>
+<script>
+  // Fill the wall with real in-game thumbnails, generated live.
+  (function(){
+    const topics = ['gaming', 'tech', 'lifestyle', 'comedy', 'football', 'cooking'];
+    const styles = ['shock', 'funny', 'action', 'gameplay', 'clean', 'funny', 'shock'];
+    const titles = {
+      gaming: ['I Broke the Meta in Ranked', 'Insane Clutch at the End', 'This Loadout is Actually Broken'],
+      tech: ['This Gadget Changed My Workflow', 'Unboxing the Weirdest Tech I Own', 'Budget vs Flagship Phone'],
+      lifestyle: ['I Tried Waking Up at 5AM', 'My Minimalist Room Makeover', 'A Day in My Life as a Creator'],
+      comedy: ['This Went Wrong Immediately', 'Reacting to My Old Videos', 'I Was NOT Ready For This'],
+      football: ['Rating Free Kicks From 0-100', 'The Craziest Comeback I Have Seen', 'This Skill Move NOBODY Expected'],
+      cooking: ['Cooking With Only 3 Ingredients', '1 AM Cooking Stream Gone Wrong', 'I Tried a Viral Recipe'],
+    };
+    const faces = ['PixelQueen', 'TechMaster', 'LifestyleLuna', 'ComedyCentral_', 'FootballZone', 'ChefAmara', 'GamingHub', 'CookingKing'];
+    function tile(i){
+      const topic = topics[i % topics.length];
+      const t = titles[topic][i % 3];
+      const d = 60 * (3 + (i * 7) % 22) + (i * 13) % 60;
+      return `<div class="wt">${window.thumbSVG({ seed: 'site' + i, topic, style: styles[i % styles.length], title: t, face: faces[i % faces.length] })}<span class="dur">${Math.floor(d / 60)}:${String(d % 60).padStart(2, '0')}</span></div>`;
+    }
+    const a = [], b = [];
+    for (let i = 0; i < 8; i++){ a.push(tile(i)); b.push(tile(i + 8)); }
+    // duplicate each column so the scroll loops seamlessly
+    document.getElementById('col-a').innerHTML = a.join('') + a.join('');
+    document.getElementById('col-b').innerHTML = b.join('') + b.join('');
+  })();
+</script>
+</body>
+</html>
