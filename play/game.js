@@ -25,6 +25,7 @@ const ICON_PATHS = {
   lock: '<rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/>',
   upload: '<path d="M12 19V6"/><path d="M6 12l6-6 6 6"/>',
   play: '<path d="M7 5.5v13l11-6.5z"/>',
+  calendar: '<rect x="3" y="4.8" width="18" height="16.2" rx="2.4"/><path d="M3 9.6h18M8 3v3.4M16 3v3.4"/>',
   star: '<path d="M12 3l2.4 4.9 5.4.8-3.9 3.8.9 5.4-4.8-2.5-4.8 2.5.9-5.4L4.2 8.7l5.4-.8z"/>',
   check: '<path d="M4 12l5 5L20 6"/>',
   checkCircle: '<circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/>',
@@ -93,12 +94,12 @@ const LENGTHS = {
 };
 const FORMATS = {
   longform: { label: "Long-form", algoBonus: 0,  ctrBonus: 0,  revenueMult: 1.0  },
-  shorts:   { label: "Shorts",    algoBonus: 14, ctrBonus: 10, revenueMult: 0.45, fixedDurationSec: 45, sizeGB: 0.03 }, // algorithm pushes hard, pays less
+  shorts:   { label: "Shorts",    algoBonus: 3,  ctrBonus: 6,  revenueMult: 0.45, fixedDurationSec: 45, sizeGB: 0.03 }, // algorithm pushes hard, pays less
 };
 const EFFORTS = {
-  quick:    { label: "Quick Edit",    qualityBonus: -6, cooldownTicks: 20 },
-  standard: { label: "Standard Edit", qualityBonus: 0,  cooldownTicks: 45 },
-  polished: { label: "Polished Edit", qualityBonus: 10, cooldownTicks: 90 }, // better score, longer cooldown
+  quick:    { label: "Quick Edit",    qualityBonus: -8, cooldownTicks: 20 },
+  standard: { label: "Standard Edit", qualityBonus: 4,  cooldownTicks: 45 },
+  polished: { label: "Polished Edit", qualityBonus: 12, cooldownTicks: 90 }, // better score, longer cooldown
 };
 
 /* How well a thumbnail style suits a topic's audience — small CTR nudge, and the
@@ -121,7 +122,7 @@ const ENERGY_MAX = 100;
 const ENERGY_REGEN_PER_TICK = 1 / 6;          // +10 per in-game hour (one real minute)
 const ENERGY_BURNOUT_REGEN_MULT = 0.5;        // burned out: recovery is slower until you're back above 50
 const ENERGY_FATIGUE_LINE = 30;               // ending an upload below this starts to hurt it
-const ENERGY_COST = { quick: 12, standard: 20, polished: 30 };
+const ENERGY_COST = { quick: 12, standard: 20, polished: 26 };
 const ENERGY_LENGTH_EXTRA = { m3: 0, m8: 0, m15: 4, m25: 8 };
 const AB_TEST_ENERGY = 4, AB_TEST_COOLDOWN = 10;
 const COLLAB_ENERGY = 25;
@@ -579,6 +580,7 @@ let state = {
   hourlySubs: [], hourlyWatch: [], currentHourSubs: 0, currentHourWatch: 0,
   fanFunding: false,
   tutorialDone: false,
+  cadence: 'casual', cadStreak: 0, cadDayCount: 0,  // upload plan + streak (see cadence.js)
   live: null,              // the stream in progress, if any
   streamCount: 0, bestStreamPeak: 0, superChatRevenue: 0,
   lfWatchHours: 0,          // long-form watch hours only (Partner Programme path 1)
@@ -736,9 +738,12 @@ const LONG_TITLES = {
   lifestyle: ["A Full Week in My Life", "I Changed My Whole Routine for 30 Days", "The Complete Room Transformation", "Honest Q&A: Everything You Asked", "Moving Out: The Full Story"],
   cooking:   ["Cooking a Full Party Menu", "The Complete Guide to Jollof", "7 Days, 7 Countries, 7 Dishes", "Feeding My Whole Family for a Week", "Everything I Learned From Culinary School Videos"],
 };
-function generateTitle(topicKey, formatKey, lengthKey){
+function generateTitle(topicKey, formatKey, lengthKey, typeId){
   let pool;
-  if (formatKey === 'shorts') pool = Math.random() < 0.75 ? SHORTS_TITLES[topicKey] : TITLE_BANK[topicKey];
+  const typed = typeId && TYPE_TITLES[topicKey] && TYPE_TITLES[topicKey][typeId];
+  if (typed && formatKey === 'shorts') pool = Math.random() < 0.55 ? SHORTS_TITLES[topicKey] : typed;
+  else if (typed) pool = Math.random() < 0.85 ? typed : ((lengthKey === 'm15' || lengthKey === 'm25') ? LONG_TITLES[topicKey] : TITLE_BANK[topicKey]);
+  else if (formatKey === 'shorts') pool = Math.random() < 0.75 ? SHORTS_TITLES[topicKey] : TITLE_BANK[topicKey];
   else if (lengthKey === 'm15' || lengthKey === 'm25') pool = Math.random() < 0.45 ? LONG_TITLES[topicKey] : TITLE_BANK[topicKey];
   else pool = TITLE_BANK[topicKey];
   pool = pool || TITLE_BANK.gaming;
@@ -757,6 +762,14 @@ function applyTitleStyle(title, styleKey){
   return title;
 }
 
+/* When something changes a video's algorithm score after it was created (content type, channel
+   identity), its reach ceiling has to follow, or the bonus would never show up in views. */
+function rescaleCapForScore(v, oldScore){
+  if (!Number.isFinite(v.authorityCap)) return;
+  const qf = s => clamp(0.15 + (s / 100) * 0.85, 0.15, 1.0);
+  v.authorityCap *= qf(v.algorithmScore) / qf(oldScore);
+}
+
 /* One thumbnail variant's CTR — shared by normal uploads and both sides of an A/B test. */
 function variantCTR(thumbKey, topicKey, titleStyle, format, algorithmScore, loyalty){
   const thumb = THUMBNAILS[thumbKey] || THUMBNAILS.clean;
@@ -764,6 +777,17 @@ function variantCTR(thumbKey, topicKey, titleStyle, format, algorithmScore, loya
   return clamp(5 + thumb.ctrBonus * 0.55 + fit + titleStyle.ctrBonus * 0.5 + format.ctrBonus * 0.4
              + algorithmScore * 0.15 + (loyalty - 55) * 0.15 + rand(-3, 3), 1, 97);
 }
+
+/* Average share of a video people actually watch. Retention (the algorithm's view of how well
+   a video holds people) stays the same; longer videos just get watched less of the way through. */
+const LENGTH_VIEW_FACTOR = { m3: 0.92, m8: 0.78, m15: 0.66, m25: 0.56 };
+function viewFraction(v){
+  const r = (v.retention || 0) / 100;
+  if (v.format === 'shorts') return clamp(r, 0, 1);
+  return clamp(r * (LENGTH_VIEW_FACTOR[v.length] || 0.75), 0, 1);
+}
+function calcWatchTimeSec(v){ return Math.round((v.durationSec || 0) * viewFraction(v)); }
+function shownRetention(v){ return Math.round(viewFraction(v) * 100); }
 
 /* extras: { fatigue, abThumb, collab: { name, subs, topic } } — all optional */
 function createVideo(topicKey, thumbKey, lengthKey, effortKey, titleStyleKey, formatKey, extras){
@@ -807,8 +831,8 @@ function createVideo(topicKey, thumbKey, lengthKey, effortKey, titleStyleKey, fo
   const video = {
     id: crypto.randomUUID ? crypto.randomUUID() : String(Math.random()),
     title: extras.collab
-      ? `Ft. ${extras.collab.name} — ${applyTitleStyle(generateTitle(topicKey, formatKey, lengthKey), titleStyleKey)}`
-      : applyTitleStyle(generateTitle(topicKey, formatKey, lengthKey), titleStyleKey),
+      ? `Ft. ${extras.collab.name} — ${applyTitleStyle(generateTitle(topicKey, formatKey, lengthKey, findType(topicKey, extras.ctype).id), titleStyleKey)}`
+      : applyTitleStyle(generateTitle(topicKey, formatKey, lengthKey, findType(topicKey, extras.ctype).id), titleStyleKey),
     ab,
     collab: extras.collab ? { name: extras.collab.name, subs: extras.collab.subs, resolved: false } : null,
     fatigued: fatigue > 0,
@@ -816,7 +840,7 @@ function createVideo(topicKey, thumbKey, lengthKey, effortKey, titleStyleKey, fo
     algorithmScore, ctr, retention,
     authorityCap: (() => {
       // Nth upload sets the base ceiling; a real subscriber base lifts it (they show up for you).
-      const raw = Math.max(authorityCeiling(state.uploadLog.length + 1), state.subs * 1.2);
+      const raw = Math.max(authorityCeiling(state.uploadLog.length + 1), state.subs * 0.6);
       if (!Number.isFinite(raw)) return Infinity;
       // Quality known immediately — a weak video shouldn't get to "wait and see" its way to the max.
       const qualityFrac = clamp(0.15 + (algorithmScore / 100) * 0.85, 0.15, 1.0);
@@ -842,7 +866,11 @@ function createVideo(topicKey, thumbKey, lengthKey, effortKey, titleStyleKey, fo
     publishPhase: 'live', // overwritten to 'uploading' by the upload sequence for a freshly-created video
   };
 
+  applyContentTypePre(video, extras.ctype);   // what the video is about: challenge, guide, review...
+  applyIdentityPre(video);                    // what your channel is known for
   deriveVideoFlavor(video); // sets entertainment/educational/satisfaction/watchTime + generates comments
+  applyContentTypePost(video);
+  applyIdentityPost(video);
   updateAudienceLoyalty(topicKey, video.satisfaction);
   updateTopicAffinity(topicKey, video);
   state.lastUploadTick = state.totalTicks;
@@ -879,7 +907,7 @@ function deriveVideoFlavor(v){
       ? seededInt(v.id + ':dur', 14, 59)                                                   // Shorts: 0:14 - 0:59
       : Math.round(length.durationSec * (0.9 + seededInt(v.id + ':dur', 0, 1000) / 1000 * 0.14)); // 25 min -> 22:30 - 26:00
   }
-  v.watchTimeSec = Math.round(v.durationSec * (retention / 100));
+  v.watchTimeSec = calcWatchTimeSec(v);
   v.comments = generateComments(v);
 }
 
@@ -917,6 +945,7 @@ function makeComment(v){
     if (v.collab && v.collab.name) return say(pickW([`Came from ${v.collab.name}'s channel, instant sub.`, `You and ${v.collab.name} need to do this again.`, `${v.collab.name} brought me here!`]));
     if (state.subs < 100) return say(pickW(["Early gang, you're going to blow up.", "Found you before you got big.", "Only this many subs?? Criminal."]));
   }
+  if (v.ctArch && TYPE_COMMENTS[v.ctArch] && Math.random() < 0.35) return say(pickW(TYPE_COMMENTS[v.ctArch][tone]));
   const topicPool = TOPIC_TONE[v.topic] && TOPIC_TONE[v.topic][tone];
   if (topicPool && Math.random() < 0.55) return say(pickW(topicPool));
   return say(pickW(tone === 'pos' ? POSITIVE_COMMENTS : tone === 'neu' ? NEUTRAL_COMMENTS : NEGATIVE_COMMENTS));
@@ -962,8 +991,9 @@ function decideOutcome(v){
   const score = v.algorithmScore;
   const strength = channelStrength();
   // Viral chance: ~1% brand new, ~3% at 100 subs, ~7% at 1K, ~11% at 10K, ~17% at 100K+.
-  const deadChance  = clamp(45 - score * 0.42 - strength * 14, 5, 45);
-  const viralChance = clamp(0.8 + strength * strength * 14 + Math.max(0, score - 45) * 0.15, 0.8, 20);
+  const CT = archOf(v);
+  const deadChance  = clamp(45 - score * 0.42 - strength * 14, 5, 45) * (CT ? CT.dead : 1);
+  const viralChance = clamp(0.8 + strength * strength * 14 + Math.max(0, score - 45) * 0.15, 0.8, 20) * (CT ? CT.viral : 1);
   const roll = rand(0, 100);
 
   let outcomeType, floorFrac;
@@ -996,7 +1026,7 @@ function decideOutcome(v){
     triggerHypeMusic();
   } else {
     outcomeType = "normal";
-    v.baseRate = 14 + score * 1.0 + Math.min(state.subs * 0.0015, 600); // subscribers see it on day one
+    v.baseRate = 14 + score * 1.0 + Math.min(state.subs * 0.001, 400) * (v.notifyShare || 1); // subscribers see it on day one (less so if you've flooded their feed)
     v.rateCeiling = rand(15000, 90000) * (1 + strength);
     v.decayFactor = 0.978;
     v.pulseChance = 0.0006 + score / 150000;
@@ -1004,19 +1034,27 @@ function decideOutcome(v){
     state.algoRating = clamp(state.algoRating + 0.6, 0, 100);
   }
 
+  // Content type shapes the curve: news spikes and dies, guides start slow and last.
+  {
+    const r = applyContentTypeOutcome(v, { baseRate: v.baseRate, floorFrac, decayFactor: v.decayFactor, pulseChance: v.pulseChance });
+    v.baseRate = r.baseRate; floorFrac = r.floorFrac; v.decayFactor = r.decayFactor; v.pulseChance = r.pulseChance;
+    v.spikeMult = r.spike || 1;
+  }
+  v.baseRate *= timeOfDayMult(typeof v.publishHour === 'number' ? v.publishHour : Math.floor(clockMinute(state.totalTicks) / 60));
   // Retention and satisfaction nudge decay speed: sticky, well-loved videos decline slower.
   v.decayFactor = clamp(v.decayFactor + (v.retention - 50) / 2500 + (v.satisfaction - 50) / 4000, 0.92, 0.996);
 
   // A new channel's video genuinely cannot exceed this yet (already quality-scaled at creation time).
   if (Number.isFinite(v.authorityCap)){
     v.rateCeiling = Math.min(v.rateCeiling, v.authorityCap);
-    v.baseRate = Math.min(v.baseRate, v.authorityCap * 0.12);
+    v.baseRate = Math.min(v.baseRate, v.authorityCap * 0.12 * Math.max(1, v.spikeMult || 1)); // news gets its day-one burst
   }
   v.floorRate = v.baseRate * floorFrac; // a real trickle — always less than the starting rate
   v.rate = v.baseRate;
   v.peakRate = v.baseRate;
   v.outcomeType = outcomeType;
   v.outcomeDecided = true;
+  contentTypeAftermath(v);
 
   // Explicit quality penalty: a genuinely low-scoring upload dents authority even when it
   // doesn't happen to hit the "dead" roll — consistently mismatched/rushed content adds up.
@@ -1115,6 +1153,8 @@ function testingRate(v){
 /* Small chance each tick of a "Streamly recommends you again" pulse — this is what
    creates the unpredictable plateau -> sudden climb -> plateau pattern requested. */
 function maybeApplyPulse(v){
+  const ct = v.ctArch && ARCHETYPES[v.ctArch];
+  if (ct && ct.pulseDelay && v.age < ct.pulseDelay) return false; // search traffic finds guides later, not on day one
   if (Math.random() >= v.pulseChance) return false;
   const surge = Math.max(v.rate, v.baseRate * 1.2) * rand(3, 9);
   v.rate = Math.min(surge, v.rateCeiling);
@@ -1134,7 +1174,10 @@ function subConversionRate(v){
   const retentionFactor = Math.pow(retention / 100, 2.2);      // low retention converts far worse, not linearly
   const satisfactionMult = 0.6 + (satisfaction / 100) * 0.8;    // 0.6x-1.4x on top of retention
   const qualityMult = 1 + quality / 300;                        // good gear makes the "subscribe" ask land better
-  return clamp(0.0006 + retentionFactor * 0.045, 0, 0.06) * satisfactionMult * qualityMult;
+  const ct = archOf(v);
+  // Shorts viewers scroll on: lots of views, far fewer of them subscribe than on long-form.
+  const formatMult = v.format === 'shorts' ? 0.13 : 1;
+  return clamp(0.0006 + retentionFactor * 0.045, 0, 0.06) * satisfactionMult * qualityMult * (ct ? ct.subs : 1) * identitySubsMult(v) * formatMult;
 }
 
 /* Fractional subscribers accumulate (a single tick's gain is usually well under 1 whole
@@ -1176,7 +1219,7 @@ function stepLiveMetrics(v, justPulsed){
   v.ctr = clamp(v.baseCtr * audienceMult + v.ctrDrift, 0.5, 60);
   v.retDrift = clamp(v.retDrift * 0.997 + rand(-0.09, 0.09), -7, 7);
   v.retention = clamp(v.baseRetention + v.playlistRet - 4 * (1 - Math.exp(-v.age / 400)) + v.retDrift, 3, 98);
-  v.watchTimeSec = Math.round((v.durationSec || 0) * v.retention / 100);
+  v.watchTimeSec = calcWatchTimeSec(v);
 }
 
 function advanceVideo(v, ticks){
@@ -1225,7 +1268,7 @@ function advanceVideo(v, ticks){
     // likes and comments accrue at rates that track the live numbers
     const likeRate = (0.012 + (v.satisfaction / 100) * 0.05) * (0.75 + v.retention / 200);
     v.likes += applied * likeRate;
-    const commentRate = 0.0015 + v.ctr / 5000 + Math.abs(v.satisfaction - 50) / 15000;
+    const commentRate = (0.0015 + v.ctr / 5000 + Math.abs(v.satisfaction - 50) / 15000) * (v.ctArch && ARCHETYPES[v.ctArch] ? ARCHETYPES[v.ctArch].comments : 1) * identityCommentsMult();
     const newComments = applied * commentRate;
     v.commentCount += newComments;
     if (Math.random() < Math.min(0.5, newComments * 0.08)){
@@ -1383,9 +1426,11 @@ function tickCreatorFeed(){
   const rivals = ensureRivals();
 
   rivals.forEach(r => {
-    const jitter = 1 + rand(-r.volatility, r.volatility * 1.6); // slightly upward-skewed, like real growth
-    // Growth slows as a rival approaches the ceiling, so nobody runs away to billions.
-    r.subs = clamp(r.subs * (1 + r.growthRate * jitter * (1 - r.subs / RIVAL_SUBS_CAP)), 500, RIVAL_SUBS_CAP);
+    if (!r.peer){ // peer rivals grow alongside you in tickRivalry
+      const jitter = 1 + rand(-r.volatility, r.volatility * 1.6); // slightly upward-skewed, like real growth
+      // Growth slows as a rival approaches the ceiling, so nobody runs away to billions.
+      r.subs = clamp(r.subs * (1 + r.growthRate * jitter * (1 - r.subs / RIVAL_SUBS_CAP)), 500, RIVAL_SUBS_CAP);
+    }
 
     const crossed = FEED_MILESTONE_STEPS.find(m => r.subs >= m && (r.lastMilestone || 0) < m);
     if (crossed){
@@ -1446,10 +1491,11 @@ function applyInactivityPenalty(){
 }
 
 /* ---------- Creator energy ---------- */
-function energyCostFor(effortKey, lengthKey, formatKey, withAB){
-  let cost = (ENERGY_COST[effortKey] || 20) + (formatKey === 'shorts' ? -6 : (ENERGY_LENGTH_EXTRA[lengthKey] || 0));
+function energyCostFor(effortKey, lengthKey, formatKey, withAB, topicKey, typeId){
+  let cost = (ENERGY_COST[effortKey] || 20) + (formatKey === 'shorts' ? -3 : (ENERGY_LENGTH_EXTRA[lengthKey] || 0));
   if (withAB) cost += AB_TEST_ENERGY;
-  return Math.max(6, cost);
+  if (topicKey) cost += ARCHETYPES[findType(topicKey, typeId).arch].energy;
+  return Math.max(6, cost + cadence().energyExtra);
 }
 /* How much a given upload will be hurt: 0 when you finish above the fatigue line. */
 function fatigueFor(cost){
@@ -1464,7 +1510,7 @@ function spendEnergy(cost){
 }
 function regenEnergy(ticks){
   if (state.energy >= ENERGY_MAX) return;
-  const rate = ENERGY_REGEN_PER_TICK * (state.burnedOut ? ENERGY_BURNOUT_REGEN_MULT : 1);
+  const rate = ENERGY_REGEN_PER_TICK * (state.burnedOut ? ENERGY_BURNOUT_REGEN_MULT : 1) * cadence().energyRegen;
   state.energy = Math.min(ENERGY_MAX, state.energy + ticks * rate);
   if (state.burnedOut && state.energy >= 50){
     state.burnedOut = false;
@@ -1501,6 +1547,8 @@ function advanceGlobalTicks(n){
   for (let d = daysBefore; d < daysAfter; d++){
     announcePlayerRank();
     applyInactivityPenalty();
+    checkCadence();
+    audienceDecay();
     payoutMembershipRevenue();
   }
   if (daysAfter > daysBefore){
@@ -1542,6 +1590,7 @@ function advanceGlobalTicks(n){
     state.pendingShortsRevenue = 0;
     state.currentHourRevenue = 0;
     tickCreatorFeed();
+    tickRivalry();
   }
 
   // Internet bill — handles multiple missed cycles correctly if a big offline jump crosses several.
@@ -1574,6 +1623,7 @@ function liveTick(){
   accrueViewXP(totalViews, liveSubs);
 
   advanceGlobalTicks(1);
+  publishDueVideos();
   if (state.uploadCooldownTicksLeft > 0) state.uploadCooldownTicksLeft--;
   if (state.live){ tickLiveStream(); renderLivePill(); }
   if (hypeMusicUntil && Date.now() > hypeMusicUntil){
@@ -1592,9 +1642,14 @@ function runOfflineProgress(){
   offlineFastForward = true;
 
   let totalViews = 0, totalMoney = 0, totalSubsRaw = 0, totalWatchHours = 0;
+  // scheduled videos that went live while you were away only run from their publish time
+  const startTick = state.totalTicks, partial = {};
+  scheduledVideos().forEach(v => {
+    if (v.publishAt <= startTick + ticks){ goLive(v, Math.max(startTick, v.publishAt)); partial[v.id] = startTick + ticks - Math.max(startTick, v.publishAt); }
+  });
   state.videos.forEach(v => {
     if (v.publishPhase && v.publishPhase !== 'live') return; // still mid-pipeline, handled on next load instead
-    const r = advanceVideo(v, ticks);
+    const r = advanceVideo(v, partial[v.id] !== undefined ? partial[v.id] : ticks);
     totalViews += r.viewsGained;
     totalMoney += r.moneyGained;
     totalSubsRaw += r.subsGainedRaw;
@@ -1796,7 +1851,10 @@ function maybeTriggerEvent(){
     showToast(ic('alert') + ` Controversy around "${v.title}" — views spiked, rating took a hit`, true);
 
   } else if (roll < 0.78 && state.unlocks.sponsorships){
-    const amount = rand(30, 160);
+    // brands pay more when your recent uploads include reviews or unboxings
+    const sponsorFriendly = (state.videos || []).slice(-5).some(x => x.ctArch && ARCHETYPES[x.ctArch] && ARCHETYPES[x.ctArch].sponsor);
+    if (identitySponsorRefuses()){ showToast(ic('gift') + ' A brand passed on working with you after your recent controversies.'); return; }
+    const amount = rand(30, 160) * (sponsorFriendly ? 1.4 : 1) * identitySponsorMult();
     state.money += amount;
     state.lifetimeRevenue += amount;
     state.sponsorshipRevenue += amount;
@@ -1962,6 +2020,7 @@ function statusPill(status){
 }
 
 const UPLOAD_PHASE_LABEL = {
+  scheduled:    (v) => `Scheduled for ${formatTick(v.publishAt)}`,
   editing:      () => `Editing...`,
   rendering:    () => `Rendering...`,
   exporting:    () => `Exporting...`,
@@ -2082,6 +2141,7 @@ function renderVideos(){
         ${stage ? `<div class="pipeline-stage">${stage}</div>` : ''}
         <div class="upload-progress-label">${label}</div>
         ${v.publishPhase === 'uploading' ? `<div class="upload-progress-track"><div class="fill" style="width:${v.publishProgress}%"></div></div>` : ''}
+        ${v.publishPhase === 'scheduled' ? `<div class="sched-actions"><button class="mini-btn" data-sched-now="${v.id}">Publish now</button><button class="mini-btn danger" data-sched-cancel="${v.id}">Cancel</button></div>` : ''}
         ${v.publishPhase === 'revealing' ? `
           <div class="live-counter">
             <span class="rec"><span class="rdot"></span>LIVE</span>
@@ -2137,11 +2197,11 @@ function renderVideos(){
             <div class="rv-thumb">${videoThumb(v)}<span class="lu-dur">${durLabel}</span></div>
             <div class="rv-main">
               <div class="rv-title">${v.title} <span class="expand-caret">${v.expanded ? ic('chevronDown') : ic('chevronRight')}</span></div>
-              <div class="rv-sub">${fmt(v.views)} views</div>
+              <div class="rv-sub">${fmt(v.views)} views${v.ctName ? ` &middot; ${v.ctName}` : ''}</div>
             </div>
           </div>
           <span class="rv-col mono">${fmt(v.views)}</span>
-          <span class="rv-col mono">${Math.round(v.retention)}%</span>
+          <span class="rv-col mono">${shownRetention(v)}%</span>
           <span class="rv-col mono">${Math.round(v.ctr)}%</span>
           <span class="rv-col mono rv-revenue">$${(v.revenueEarned || 0).toFixed(2)}</span>
           <span class="rv-col rv-status-col">${statusPill(v.status)}</span>
@@ -2339,7 +2399,14 @@ function beginUploadSequence(v){
 
   function runPost(i){
     if (i >= POST_STEPS.length){
-      v.publishPhase = 'live';
+      if (v.publishAt && v.publishAt > state.totalTicks){
+        v.publishPhase = 'scheduled';
+        playSuccessSound();
+        showToast(ic('calendar') + ` Scheduled: "${v.title}" goes live ${formatTick(v.publishAt)}`, true);
+        renderVideos(); renderHome(); renderCooldown();
+        return;
+      }
+      goLive(v);
       playSuccessSound();
       renderVideos();
       renderHome();
@@ -2621,8 +2688,8 @@ function renderHome(){
             </div>
             <div class="lu-meters">
               <div class="lu-meter">
-                <div class="lu-meter-label"><span>Retention</span><span class="mono">${Math.round(v.retention)}%</span></div>
-                <div class="lu-meter-track"><div class="fill retention" style="width:${Math.round(v.retention)}%"></div></div>
+                <div class="lu-meter-label"><span>Retention</span><span class="mono">${shownRetention(v)}%</span></div>
+                <div class="lu-meter-track"><div class="fill retention" style="width:${shownRetention(v)}%"></div></div>
               </div>
               <div class="lu-meter">
                 <div class="lu-meter-label"><span>CTR</span><span class="mono">${Math.round(v.ctr)}%</span></div>
@@ -2678,13 +2745,13 @@ function renderHome(){
   document.getElementById('algo-stars').innerHTML = ic('star', 'star-filled').repeat(starsFilled) + ic('star', 'star-empty').repeat(5 - starsFilled);
 
   const avgRetention = state.videos.length
-    ? state.videos.reduce((sum, v) => sum + v.retention, 0) / state.videos.length
+    ? state.videos.reduce((sum, v) => sum + viewFraction(v) * 100, 0) / state.videos.length
     : 0;
   const avgCtr = state.videos.length
     ? state.videos.reduce((sum, v) => sum + v.ctr, 0) / state.videos.length
     : 0;
-  const recentUploads = state.uploadLog.filter(t => state.totalTicks - t <= DAY_TICKS).length;
-  const consistency = clamp((recentUploads / 3) * 100, 0, 100);
+  const C = cadence();
+  const consistency = clamp((uploadsInLastDays(C.windowDays) / C.need) * 100, 0, 100);
 
   document.getElementById('stat-retention').textContent = state.videos.length ? Math.round(avgRetention) + '%' : '—';
   document.getElementById('fill-retention').style.width = avgRetention + '%';
@@ -3003,7 +3070,7 @@ function renderVideoAnalytics(){
   let series, fmtY;
   if (vaMetric === 'views'){ series = hist.map((h, k) => k === 0 ? h[0] : Math.max(0, h[0] - hist[k - 1][0])); fmtY = x => fmtCompact(x); }
   else if (vaMetric === 'ctr'){ series = hist.map(h => h[1]); fmtY = x => x.toFixed(1) + '%'; }
-  else { series = hist.map(h => h[2]); fmtY = x => Math.round(x) + '%'; }
+  else { const f = viewFraction(v) / Math.max(0.01, v.retention / 100); series = hist.map(h => h[2] * f); fmtY = x => Math.round(x) + '%'; }
   if (series.length < 2) series = [series[0] || 0, series[0] || 0];
   const maxV = Math.max(0.1, ...series);
   const subs = Math.floor(v.subsRaw || 0);
@@ -3015,7 +3082,7 @@ function renderVideoAnalytics(){
       <div class="va-thumb">${videoThumb(v)}<span class="lu-dur">${mmss(dur)}</span></div>
       <div class="va-head-main">
         <div class="va-title">${v.title}</div>
-        <div class="va-meta">${TOPICS[v.topic] ? TOPICS[v.topic].label : ''} &middot; ${v.format === 'shorts' ? 'Short' : 'Long-form'} &middot; published ${formatDuration(v.age)} ago</div>
+        <div class="va-meta">${TOPICS[v.topic] ? TOPICS[v.topic].label : ''}${v.ctName ? ' ' + v.ctName : ''} &middot; ${v.format === 'shorts' ? 'Short' : 'Long-form'} &middot; published ${formatDuration(v.age)} ago</div>
         <div class="va-status">${statusPill(v.status)}<span class="va-algo">${algo.text}</span></div>
       </div>
     </div>
@@ -3023,7 +3090,7 @@ function renderVideoAnalytics(){
       ${card('Views', fmt(v.views), '')}
       ${card('Watch time', fmt(v.views * avd / 3600) + 'h', 'Avg view ' + mmss(avd) + ' of ' + mmss(dur))}
       ${card('CTR', v.ctr.toFixed(1) + '%', 'Started at ' + v.baseCtr.toFixed(1) + '%')}
-      ${card('Retention', Math.round(v.retention) + '%', 'Started at ' + Math.round(v.baseRetention) + '%')}
+      ${card('Retention', shownRetention(v) + '%', 'Started at ' + Math.round(v.baseRetention * viewFraction(v) / Math.max(0.01, v.retention / 100)) + '%')}
       ${card('Subscribers', '+' + fmt(subs), '')}
       ${card('Likes', fmt(v.likes), '')}
       ${card('Comments', fmt(v.commentCount), '')}
@@ -3144,8 +3211,8 @@ function renderAnalyticsTopVideo(){
           </div>
           <div class="lu-meters" style="margin-top:14px;">
             <div class="lu-meter">
-              <div class="lu-meter-label"><span>Retention</span><span class="mono">${Math.round(top.retention)}%</span></div>
-              <div class="lu-meter-track"><div class="fill retention" style="width:${Math.round(top.retention)}%"></div></div>
+              <div class="lu-meter-label"><span>Retention</span><span class="mono">${shownRetention(top)}%</span></div>
+              <div class="lu-meter-track"><div class="fill retention" style="width:${shownRetention(top)}%"></div></div>
             </div>
             <div class="lu-meter">
               <div class="lu-meter-label"><span>CTR</span><span class="mono">${Math.round(top.ctr)}%</span></div>
@@ -3238,7 +3305,7 @@ function renderPartnerProgramme(){
       <div class="meter-label"><span class="name">Shorts views, last 90 days</span><span class="val">${fmt(sv)} / ${fmtCompact(SPP_SHORTS_VIEWS_REQUIRED)}</span></div>
       <div class="meter-track"><div class="fill" style="width:${shortsPct}%"></div></div>
     </div>
-    <div class="spp-note">${state.isMonetized ? `Approved through ${state.monetizedVia || 'long-form watch hours'}. Long-form earns ad revenue and Shorts earn from the Shorts feed.` : 'No ad money until tier 2. Views before approval earn nothing, just like on YouTube.'}</div>
+    <div class="spp-note">${state.isMonetized ? `Approved through ${state.monetizedVia || 'long-form watch hours'}. Long-form earns ad revenue and Shorts earn from the Shorts feed.` : 'No ad money until tier 2. Views before approval earn nothing.'}</div>
   `;
 }
 
@@ -3469,6 +3536,7 @@ function renderCreatorFeed(){
    ========================================================================= */
 function performUpload(o){
   if (state.uploadCooldownTicksLeft > 0) return null;
+  if (o.publishAt && scheduledVideos().length >= MAX_SCHEDULED){ playErrorSound(); showToast(ic('calendar') + ` You already have ${MAX_SCHEDULED} videos scheduled.`); return null; }
   if (state.live){ playErrorSound(); showToast(ic('tv') + " You're live right now. End the stream before uploading."); return null; }
   const { topicKey, thumbKey, lengthKey, effortKey, titleStyleKey, formatKey } = o;
   const abThumb = o.abThumb && o.abThumb !== thumbKey ? o.abThumb : '';
@@ -3487,11 +3555,22 @@ function performUpload(o){
     return null;
   }
 
-  const cost = o.collab ? COLLAB_ENERGY : energyCostFor(effortKey, lengthKey, formatKey, !!abThumb);
+  const cost = o.collab ? COLLAB_ENERGY : energyCostFor(effortKey, lengthKey, formatKey, !!abThumb, topicKey, o.ctype);
   const fatigue = fatigueFor(cost);
+  const typeArch = ARCHETYPES[findType(topicKey, o.ctype).arch];
+  if (typeArch.cost && !o.collab){
+    if (state.money < typeArch.cost){ playErrorSound(); showToast(ic('dollar') + ` You need $${typeArch.cost} to buy something to unbox.`); return null; }
+    state.money -= typeArch.cost;
+    pushTransaction('purchase', 'Bought a product to unbox', -typeArch.cost);
+  }
 
   playClickSound();
-  const v = createVideo(topicKey, thumbKey, lengthKey, effortKey, titleStyleKey, formatKey, { fatigue, abThumb, collab: o.collab });
+  const lastBefore = state.lastUploadTick;
+  const v = createVideo(topicKey, thumbKey, lengthKey, effortKey, titleStyleKey, formatKey, { fatigue, abThumb, collab: o.collab, ctype: o.ctype });
+  if (o.publishAt && o.publishAt > state.totalTicks){
+    v.publishAt = o.publishAt; v.wasScheduled = true;
+    state.lastUploadTick = lastBefore;           // it only counts once it actually goes live
+  }
   spendEnergy(cost);
   gainXP(XP_UPLOAD[effortKey] || 40, 'upload');
   if (fatigue > 0){
@@ -3502,7 +3581,8 @@ function performUpload(o){
   if (Number.isFinite(internetTier.dataCapGB)) state.dataUsedGB += sizeGB;
 
   state.videos.push(v);
-  state.uploadLog.push(state.totalTicks);
+  onPlayerUpload(v);
+  if (!v.wasScheduled){ state.uploadLog.push(state.totalTicks); v.logged = true; }
   state.uploadCooldownTicksLeft = EFFORTS[effortKey].cooldownTicks + (abThumb ? AB_TEST_COOLDOWN : 0);
 
   renderCooldown();
@@ -3517,10 +3597,11 @@ function collabInfo(r){
   const needSubs = Math.ceil(r.subs * COLLAB_MIN_RATIO);
   const cost = Math.max(40, Math.round(r.subs * COLLAB_COST_PER_SUB));
   const readyAt = state.collabCooldowns[r.name] || 0;
+  const invited = (r.inviteUntil || 0) > state.totalTicks;   // they asked you: free, and size doesn't matter
   return {
-    needSubs, cost,
-    tooSmall: state.subs < needSubs,
-    broke: state.money < cost,
+    needSubs, cost: invited ? 0 : cost, invited,
+    tooSmall: !invited && state.subs < needSubs,
+    broke: !invited && state.money < cost,
     resting: state.totalTicks < readyAt,
     daysLeft: Math.max(1, Math.ceil((readyAt - state.totalTicks) / DAY_TICKS)),
   };
@@ -3545,6 +3626,7 @@ function startCollab(name){
   state.money -= c.cost;
   state.collabCount++;
   state.collabCooldowns[r.name] = state.totalTicks + COLLAB_RIVAL_COOLDOWN_TICKS;
+  r.inviteUntil = 0; // invitation used
   pushTransaction('collab', `Collab with ${r.name}`, -c.cost);
   showToast(ic('users') + ` Filming with ${r.name}. It goes live once the upload finishes.`, true);
   safeRenderAll();
@@ -3556,7 +3638,10 @@ function renderCollabs(){
   el.innerHTML = rivals.map(r => {
     const c = collabInfo(r);
     let status, btn;
-    if (c.tooSmall){
+    if (c.invited && !c.resting){
+      status = `Invited you! Free for ${Math.max(1, Math.ceil((r.inviteUntil - state.totalTicks) / 60))} more hours`;
+      btn = `<button class="collab-btn ready" data-collab="${r.name}" ${state.uploadCooldownTicksLeft > 0 ? 'disabled' : ''}>Accept</button>`;
+    } else if (c.tooSmall){
       status = `Needs ${fmt(c.needSubs)} subscribers`;
       btn = `<button class="collab-btn" disabled>Locked</button>`;
     } else if (c.resting){
@@ -3631,7 +3716,7 @@ function renderStudioEnergy(){
   if (!el) return;
   const p = currentStudioPicks();
   const withAB = !!(p.abThumb && p.abThumb !== p.thumbKey);
-  const cost = energyCostFor(p.effortKey, p.lengthKey, p.formatKey, withAB);
+  const cost = energyCostFor(p.effortKey, p.lengthKey, p.formatKey, withAB, p.topicKey, currentCtype(p.topicKey));
   const after = Math.max(0, state.energy - cost);
   const fatigue = fatigueFor(cost);
   const e = Math.round(state.energy);
@@ -3679,7 +3764,8 @@ function renderThumbPreview(){
   const el = document.getElementById('thumb-preview');
   if (!el) return;
   const p = currentStudioPicks();
-  const sampleTitle = (TITLE_BANK[p.topicKey] || ['New Video'])[0];
+  const typed = TYPE_TITLES[p.topicKey] && TYPE_TITLES[p.topicKey][currentCtype(p.topicKey)];
+  const sampleTitle = (typed || TITLE_BANK[p.topicKey] || ['New Video'])[0];
   const withAB = !!(p.abThumb && p.abThumb !== p.thumbKey);
   const one = (style, tag) => `
     <figure class="tp-item">
@@ -3817,6 +3903,10 @@ function sanitizeState(){
   if (typeof state.fanFunding !== 'boolean') state.fanFunding = false;
   if (state.live && (typeof state.live !== 'object' || !TOPICS[state.live.topic])) state.live = null;
   state.streamCount = num(state.streamCount, 0);
+  if (!Array.isArray(state.pendingResponses)) state.pendingResponses = [];
+  if (!state.topicCrowd || typeof state.topicCrowd !== 'object') state.topicCrowd = {};
+  if (state.peersSpawned && !(state.rivals || []).some(r => r.peer)) state.peersSpawned = false;
+  if (Array.isArray(state.rivals)) state.rivals.forEach(r => { if (!Array.isArray(r.hist)) r.hist = []; if (r.topic && !TOPICS[r.topic]) r.topic = 'gaming'; });
   state.bestStreamPeak = num(state.bestStreamPeak, 0);
   state.superChatRevenue = num(state.superChatRevenue, 0);
   // One-time recount for saves made after per-video subscriber tracking existed: subscribers the
@@ -3836,6 +3926,8 @@ function sanitizeState(){
       }
     }
   }
+  if (!CADENCES[state.cadence]) state.cadence = 'casual';
+  state.cadStreak = num(state.cadStreak, 0); state.cadDayCount = num(state.cadDayCount, 0);
   if (typeof state.tutorialDone !== 'boolean'){
     // Existing players aren't forced through the tour; they get told it exists.
     state.tutorialDone = true;
@@ -3849,7 +3941,7 @@ function sanitizeState(){
         r.subs = Math.round(RIVAL_SUBS_CAP * (tiers[i] || 0.04) * rand(0.94, 1.04));
       });
     }
-    state.rivals.forEach(r => { r.subs = clamp(num(r.subs, 1000), 500, RIVAL_SUBS_CAP); });
+    state.rivals.forEach(r => { r.subs = clamp(num(r.subs, 1000), r.peer ? 5 : 500, RIVAL_SUBS_CAP); });
   }
   if (Array.isArray(state.creatorFeed)){
     state.creatorFeed = state.creatorFeed.filter(i => !(i && typeof i.text === 'string' && /^You are #\d+ of \d+ creators/.test(i.text)));
@@ -3879,7 +3971,7 @@ function sanitizeState(){
   if (typeof state.partnerAnnounced !== 'boolean') state.partnerAnnounced = state.isMonetized;
   state.algoRating = num(state.algoRating, 0);
   if (!Array.isArray(state.creatorFeed)) state.creatorFeed = [];
-  if (!Array.isArray(state.rivals) || state.rivals.length !== RIVAL_CREATORS.length){
+  if (!Array.isArray(state.rivals) || state.rivals.filter(r => !r.peer).length !== RIVAL_CREATORS.length){
     state.rivals = RIVAL_CREATORS.map(r => ({ ...r }));
   } else {
     state.rivals.forEach(r => { r.subs = num(r.subs, 10000); });
@@ -3975,7 +4067,12 @@ function sanitizeState(){
     if (v.collab && v.outcomeDecided) v.collab.resolved = true;
     if (!THUMBNAILS[v.thumb]) v.thumb = 'clean';
     if (typeof v.expanded !== 'boolean') v.expanded = false;
-    if (v.publishPhase && v.publishPhase !== 'live') v.publishPhase = 'live';
+    // a scheduled video saved mid-pipeline goes back to waiting for its slot (publishDueVideos runs on start)
+    if (v.wasScheduled && !v.logged && typeof v.publishAt === 'number' && v.publishPhase !== 'live') v.publishPhase = 'scheduled';
+    if (v.publishPhase && v.publishPhase !== 'live' && v.publishPhase !== 'scheduled') v.publishPhase = 'live';
+    if (v.publishPhase === 'scheduled' && typeof v.publishAt !== 'number') v.publishPhase = 'live';
+    if (v.publishPhase === 'live' && !v.wasScheduled) v.logged = true;
+    if (v.publishPhase === 'live' && v.wasScheduled && !v.logged){ state.uploadLog.push(v.publishAt || state.totalTicks); v.logged = true; }
   });
 }
 
@@ -4163,6 +4260,8 @@ function startGame(hadSave){
       titleStyleKey: document.getElementById('titlestyle-select').value,
       formatKey: document.getElementById('format-select').value,
       abThumb: state.unlocks.customThumbnails && abSel ? abSel.value : '',
+      ctype: currentCtype(document.getElementById('topic-select').value),
+      publishAt: chosenPublishAt(),
     });
   });
 
@@ -4182,6 +4281,21 @@ function startGame(hadSave){
   });
   document.getElementById('video-list').addEventListener('click', (e) => {
     if (contentSubTab === 'playlists' && handlePlaylistClick(e)) e.stopPropagation();
+  }, true);
+  document.getElementById('video-list').addEventListener('click', (e) => {
+    const now = e.target.closest('[data-sched-now]'), cancel = e.target.closest('[data-sched-cancel]');
+    if (!now && !cancel) return;
+    e.stopPropagation();
+    const id = (now || cancel).dataset[now ? 'schedNow' : 'schedCancel'];
+    const v = state.videos.find(x => x.id === id);
+    if (!v || v.publishPhase !== 'scheduled') return;
+    if (now){ v.publishAt = state.totalTicks; goLive(v); playSuccessSound(); }
+    else {
+      state.videos = state.videos.filter(x => x.id !== id);
+      state.storageUsedGB = Math.max(0, state.storageUsedGB - (v.sizeGB || 0));
+      playClickSound(); showToast(ic('calendar') + ` Cancelled "${v.title}".`);
+    }
+    safeRenderAll();
   }, true);
   document.getElementById('video-list').addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && e.target.id === 'pl-name-input') document.getElementById('pl-create-btn').click();
@@ -4291,9 +4405,9 @@ function startGame(hadSave){
   /* Studio: live thumbnail preview + energy forecast follow every picker */
   ['topic-select', 'thumbnail-select', 'ab-thumbnail-select', 'length-select', 'effort-select', 'titlestyle-select', 'format-select'].forEach(id => {
     const el = document.getElementById(id);
-    if (el) el.addEventListener('change', () => { renderThumbPreview(); renderStudioEnergy(); });
+    if (el) el.addEventListener('change', () => { renderCtypeChips(); renderThumbPreview(); renderStudioEnergy(); });
   });
-  document.getElementById('topic-tiles').addEventListener('click', () => { renderThumbPreview(); renderStudioEnergy(); });
+  document.getElementById('topic-tiles').addEventListener('click', () => { renderCtypeChips(); renderThumbPreview(); renderStudioEnergy(); });
   document.getElementById('format-tiles').addEventListener('click', () => { renderThumbPreview(); renderStudioEnergy(); });
   document.getElementById('coffee-btn').addEventListener('click', buyCoffee);
 
@@ -4320,6 +4434,12 @@ function startGame(hadSave){
   seedRivalUploads();
   syncPlaylistBoosts();
   initLiveUI();
+  initCtypeUI();
+  initCadenceUI();
+  publishDueVideos();
+  refreshIdentity(false);
+  const idClose = document.getElementById('identity-close');
+  if (idClose) idClose.addEventListener('click', () => { playClickSound(); document.getElementById('identity-modal').classList.remove('show'); });
   if (state.live) endLiveStream(true); // the game was closed mid-stream: wrap it up with what it had
   safeRenderAll();
   if (hadSave) runOfflineProgress();
@@ -4332,7 +4452,7 @@ function refreshVideoModal(){
   if (m && m.classList.contains('show') && vaVideoId) renderVideoAnalytics();
 }
 function safeRenderAll(){
-  const renders = [renderIdentity, renderEquipment, renderStats, renderVideos, renderHome, renderRecentVideos, renderChannelProgress, renderAnalyticsOverview, renderStatusDonut, renderMonetization, renderCooldown, renderCreatorFeed, renderDiscoverFeed, renderWhoToFollow, renderNicheStatus, renderPartnerProgramme, renderSoundToggle, renderMusicToggle, renderGameClock, renderCollabs, renderStudioEnergy, refreshVideoModal];
+  const renders = [renderIdentity, renderEquipment, renderStats, renderVideos, renderHome, renderRecentVideos, renderChannelProgress, renderAnalyticsOverview, renderStatusDonut, renderMonetization, renderCooldown, renderCreatorFeed, renderDiscoverFeed, renderWhoToFollow, renderNicheStatus, renderPartnerProgramme, renderSoundToggle, renderMusicToggle, renderGameClock, renderCollabs, renderStudioEnergy, renderCadencePanel, renderStudioCadence, renderPublishSelect, refreshVideoModal, renderIdentityCard, renderRivalWatch];
   renders.forEach(fn => {
     try { fn(); } catch(e){ console.error('Render error in', fn.name, e); }
   });
@@ -4349,270 +4469,64 @@ function safeRenderAll(){
    setProgress(n) calls from actual load events.
    ========================================================================= */
 (function bootLoader(){
+  const $ = (id) => document.getElementById(id);
+  /* AetherEdge Studios splash, then the Streamly title card, then the game.
+     The animation runs ~3.3s; the progress bar and status line follow real work:
+     fonts loading, then the game itself starting up behind the splash. */
+  const root = $('boot-loader');
+  const fill = $('ae-fill'), status = $('ae-status'), tap = $('ae-tap');
   const REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const ANIM_MS = REDUCED ? 300 : 6300;   // ~6s studio sequence
+  let ready = false, animDone = false, leaving = false;
+  const setProgress = (pct, text) => { fill.style.width = pct + '%'; if (text) status.textContent = text; };
 
-  let FIRST_LOAD = true;
-  try { FIRST_LOAD = !localStorage.getItem('streamly_booted'); } catch(e){ /* sandboxed — just always show the boot sequence */ }
-
-  const SUB_TARGET = 1247893; // overshoot — feels authentic, not a round milestone
-
-  const TIPS = [
-    'Upload consistently. Long breaks cost you algorithm trust.',
-    'Check today\'s audience mood before picking a topic.',
-    'Retention matters more than raw views for subscriber growth.',
-    'Random events can land you a brand deal, or a controversy.',
-    'Streamly sometimes re-recommends an old video out of nowhere.',
-    'Ad revenue only flows once you join the Partner Programme.',
-    'Your internet plan decides how long uploads actually take.',
-    'Shorts get pushed harder by the algorithm, but pay less.',
-    'Comment tone tracks your thumbnail honesty and your content quality.',
-    'A niche you neglect will slowly lose loyalty.',
-    'Running low on energy? Tired uploads score worse. Grab a coffee or wait it out.',
-    'At 100 subscribers you can A/B test two thumbnails on the same upload.',
-    'Big enough to get noticed? Pitch a collab to a rival in Discover.',
-  ];
-
-  const BOOT_LINES = [
-    'Initializing Studio...',
-    'Connecting to Streamly servers...',
-    'Loading Creator Dashboard...',
-    'Checking Trending Topics...',
-    'Preparing Camera...',
-    'Ready!',
-  ];
-
-  const FAKE_CREATORS = ['@TechMaster', '@GamingHub', '@PixelQueen', '@ChefAmara', '@CookingKing', '@LifestyleLuna'];
-
-  function $(id){ return document.getElementById(id); }
-
-  /* ---------- particles (drift upward, like rising views) ---------- */
-  function initParticles(){
-    if (REDUCED) return;
-    const canvas = $('particles');
-    if (!canvas) return;
-    const ctx = canvas.getContext && canvas.getContext('2d');
-    if (!ctx) return; // no 2D canvas support in this environment — skip gracefully
-    let W, H;
-    const dots = [];
-
-    function resize(){
-      W = canvas.width = window.innerWidth;
-      H = canvas.height = window.innerHeight;
-    }
-    resize();
-    window.addEventListener('resize', resize);
-
-    for (let i = 0; i < 45; i++){
-      dots.push({
-        x: Math.random() * window.innerWidth,
-        y: Math.random() * window.innerHeight,
-        r: Math.random() * 1.8 + 0.4,
-        s: Math.random() * 0.35 + 0.08,
-        drift: (Math.random() - 0.5) * 0.15,
-        a: Math.random() * 0.35 + 0.08,
-      });
-    }
-
-    (function frame(){
-      try {
-        ctx.clearRect(0, 0, W, H);
-        dots.forEach(d => {
-          d.y -= d.s;
-          d.x += d.drift;
-          if (d.y < -4){ d.y = H + 4; d.x = Math.random() * W; }
-          ctx.beginPath();
-          ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(255, 255, 255, ${d.a})`;
-          ctx.fill();
-        });
-      } catch(e){ return; } // never let a canvas quirk break the boot flow
-      requestAnimationFrame(frame);
-    })();
-  }
-
-  /* ---------- boot sequence (first visit only) ---------- */
-  function flashCreators(){
-    const sync = $('bootSync');
-    if (!sync) return;
-    let i = 0;
-    const iv = setInterval(() => {
-      sync.textContent = 'Syncing ' + FAKE_CREATORS[i % FAKE_CREATORS.length] + '...';
-      i++;
-      if (i >= FAKE_CREATORS.length){ clearInterval(iv); sync.textContent = ''; }
-    }, 160);
-  }
-
-  function runBoot(){
-    return new Promise(resolve => {
-      const box = $('bootLines');
-      let idx = 0;
-
-      function finalizeLine(el, line){
-        el.innerHTML = '<span class="check">' + ic('check') + '</span> ' + line;
-        setTimeout(nextLine, 280);
+  async function load(){
+    // 1. fonts: the splash wordmark, then the game's UI font (never wait more than ~2.5s)
+    setProgress(8, 'Loading fonts');
+    const fontJobs = ['400 14px Inter', '500 14px Inter', '600 14px Inter', '700 14px Inter'];
+    let done = 0;
+    const timeout = new Promise(r => setTimeout(r, 2500));
+    try {
+      if (document.fonts && document.fonts.load){
+        await Promise.race([
+          Promise.all(fontJobs.map(f => document.fonts.load(f).then(() => { done++; setProgress(8 + Math.round(done / fontJobs.length * 37)); }).catch(() => {}))),
+          timeout,
+        ]);
       }
-
-      function nextLine(){
-        if (idx >= BOOT_LINES.length){
-          setTimeout(resolve, 300);
-          return;
-        }
-        const line = BOOT_LINES[idx];
-        idx++;
-        const el = document.createElement('div');
-        el.className = 'boot-line';
-        el.textContent = line;
-        box.appendChild(el);
-
-        const isServerLine = line.indexOf('servers') !== -1;
-        if (isServerLine && Math.random() < 0.15){
-          setTimeout(() => {
-            el.innerHTML = line + ' <span class="warn">' + ic('alert') + ' Retry...</span>';
-            setTimeout(() => {
-              flashCreators();
-              finalizeLine(el, line);
-            }, 480);
-          }, 280);
-        } else {
-          if (isServerLine) flashCreators();
-          finalizeLine(el, line);
-        }
-      }
-
-      nextLine();
-    });
+    } catch(e){}
+    // 2. the game: read the save, build every tab, warm the thumbnail cache (all behind the splash)
+    setProgress(50, 'Opening your studio');
+    await new Promise(r => setTimeout(r, 30));     // let the bar paint before the heavy work
+    try { init(); } catch(e){ console.error(e); }
+    setProgress(85);
+    await new Promise(r => setTimeout(r, 30));
+    try { if (typeof safeRenderAll === 'function') safeRenderAll(); } catch(e){}
+    // 3. done
+    setProgress(100, 'Ready');
+    ready = true;
+    if (!animDone) tap.classList.add('show');
+    maybeLeave();
   }
 
-  /* ---------- tagline ---------- */
-  function showTagline(){
-    const el = $('tagline');
-    const text = 'Build your channel. Chase the algorithm. Become a creator.';
-    if (FIRST_LOAD && !REDUCED){
-      let i = 0;
-      function typeChar(){
-        el.innerHTML = text.slice(0, i) + '<span class="caret">|</span>';
-        i++;
-        if (i <= text.length){
-          setTimeout(typeChar, 22);
-        } else {
-          el.textContent = text;
-        }
-      }
-      typeChar();
-    } else {
-      el.textContent = text;
-      el.style.opacity = '0';
-      el.style.transition = 'opacity .8s';
-      requestAnimationFrame(() => { el.style.opacity = '1'; });
-    }
-  }
-
-  /* ---------- tips rotation ---------- */
-  let tipIndex = Math.floor(Math.random() * TIPS.length);
-  function startTips(){
-    const tip = $('tip');
-    function show(){
-      tip.classList.remove('wifi');
-      tip.innerHTML = TIPS[tipIndex % TIPS.length];
-      tipIndex++;
-      tip.classList.remove('fading');
-    }
-    show();
-    setInterval(() => {
-      tip.classList.add('fading');
-      setTimeout(show, 400);
-    }, 3200);
-  }
-
-  /* ---------- loading progress + choreographed stats ---------- */
-  let progress = 0;
-  let bootDone = false;
-  let lastChangeAt = Date.now();
-  let wifiShown = false;
-
-  function easeOut(t){ return 1 - Math.pow(1 - t, 3); }
-
-  function render(){
-    $('fill').style.width = progress + '%';
-    $('pct').textContent = Math.floor(progress);
-
-    const subs = Math.floor(easeOut(progress / 100) * SUB_TARGET);
-    $('subCount').textContent = subs.toLocaleString('en-US');
-
-    $('heartTop').style.clipPath = `inset(${100 - progress}% 0 0 0)`;
-
-    const bell = $('bell');
-    if (progress >= 90){
-      bell.classList.remove('ringing');
-      bell.classList.add('glowing');
-    } else if (progress >= 60){
-      bell.classList.add('ringing');
-    }
-
-    if (progress >= 90) $('fill').classList.add('hot');
-    const stepEl = $('ld-step');
-    if (stepEl) stepEl.textContent = progress < 30 ? 'Loading studio' : progress < 60 ? 'Syncing your channel' : progress < 90 ? 'Checking trending topics' : 'Ready';
-  }
-
-  function tick(){
-    if (bootDone) return;
-    const remaining = 100 - progress;
-    progress = Math.min(100, progress + remaining * 0.045 + Math.random() * 0.9);
-    lastChangeAt = Date.now();
-    render();
-    if (progress >= 100){ finish(); return; }
-    setTimeout(tick, 60);
-  }
-
-  setInterval(() => {
-    if (!bootDone && !wifiShown && progress < 100 && Date.now() - lastChangeAt > 2600){
-      wifiShown = true;
-      const tip = $('tip');
-      tip.classList.add('wifi');
-      tip.innerHTML = ic('alert') + ' Still loading… must be the WiFi. Even top creators deal with this.';
-    }
-  }, 500);
-
-  /* ---------- finish: camera-shutter flash -> hand off to the real game ---------- */
-  function finish(){
-    if (bootDone) return;
-    bootDone = true;
-    progress = 100;
-    render();
-    $('skipBtn').classList.remove('show');
-
+  function maybeLeave(){ if (ready && animDone) toGame(); }
+  function toGame(){
+    if (leaving) return;
+    leaving = true;
+    tap.classList.remove('show');
+    root.classList.add('to-game');                 // studio fades out, Streamly title card plays
+    const titleMs = REDUCED ? 400 : 3200;   // Streamly title card
     setTimeout(() => {
-      const flash = $('flash');
-      flash.style.transition = 'none';
-      flash.style.opacity = '1';
-      setTimeout(() => {
-        $('boot-loader').classList.add('hide');
-        flash.style.transition = 'opacity .45s';
-        flash.style.opacity = '0';
-        setTimeout(init, 420); // hand off to the real game once the fade completes
-      }, 150);
-    }, 350);
+      root.classList.add('hide');
+      setTimeout(() => { root.style.display = 'none'; }, 480);
+    }, titleMs);
   }
-
-  /* ---------- orchestration ---------- */
-  async function start(){
-    initParticles();
-
-    if (FIRST_LOAD){
-      await runBoot();
-      try { localStorage.setItem('streamly_booted', '1'); } catch(e){ /* sandboxed — fine, it'll just show again next time */ }
-    }
-    $('boot').classList.add('hidden');
-
-    $('loader').classList.add('visible');
-    $('skipBtn').classList.add('show');
-
-    showTagline();
-    startTips();
-    tick();
-  }
-
-  $('skipBtn').addEventListener('click', finish);
-
-  start();
+  // tap to skip, but only once everything has actually loaded
+  root.addEventListener('click', () => {
+    if (!ready) return;
+    if (!root.classList.contains('to-game')) toGame();
+    else { root.classList.add('hide'); setTimeout(() => { root.style.display = 'none'; }, 480); }
+  });
+  setTimeout(() => { animDone = true; maybeLeave(); }, ANIM_MS);
+  try { localStorage.setItem('streamly_booted', '1'); } catch(e){}
+  load();
 })();
