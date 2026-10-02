@@ -30,6 +30,7 @@
 
   <div class="boot-loader-root" id="boot-loader">
     <div class="ae-splash" id="studio-splash">
+      <div class="ae-amb" id="ae-amb" aria-hidden="true"><span class="ae-halo"></span></div>
       <div class="ae-mark"><svg class="ae-logo" viewBox="-120 -120 240 240" aria-hidden="true">
   <defs>
     <linearGradient id="aeHex" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3fd0e6"/><stop offset=".45" stop-color="#6f6bf2"/><stop offset="1" stop-color="#7c3aed"/></linearGradient>
@@ -37,10 +38,14 @@
     <linearGradient id="aeR" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5426d6"/><stop offset="1" stop-color="#3b16a8"/></linearGradient>
     <linearGradient id="aeTL" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#48e6cf"/><stop offset="1" stop-color="#25c4ae"/></linearGradient>
     <linearGradient id="aeTR" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1fae9b"/><stop offset="1" stop-color="#14867a"/></linearGradient>
+    <radialGradient id="aeBloom" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#5ff5e0" stop-opacity=".55"/><stop offset="1" stop-color="#5ff5e0" stop-opacity="0"/></radialGradient>
+    <linearGradient id="aeBeam" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#7dfff0" stop-opacity=".7"/><stop offset="1" stop-color="#7dfff0" stop-opacity="0"/></linearGradient>
     <radialGradient id="aeGlow" cx=".5" cy=".5" r=".6"><stop offset="0" stop-color="#7dfff0" stop-opacity="1"/><stop offset="1" stop-color="#2cc8b4" stop-opacity=".2"/></radialGradient>
   </defs>
   <polygon class="ae-hex-solid" points="0.0,-96.0 83.1,-48.0 83.1,48.0 0.0,96.0 -83.1,48.0 -83.1,-48.0" fill="none" stroke="url(#aeHex)" stroke-width="15" stroke-linejoin="round"/>
   <polygon class="ae-hex" points="0.0,-96.0 83.1,-48.0 83.1,48.0 0.0,96.0 -83.1,48.0 -83.1,-48.0" pathLength="1" fill="none" stroke="url(#aeHex)" stroke-width="15" stroke-linejoin="round"/>
+  <circle class="ae-bloom" cx="0" cy="-12" r="70" fill="url(#aeBloom)"/>
+  <rect class="ae-beam" x="-16" y="-120" width="32" height="118" fill="url(#aeBeam)"/>
   <g class="ae-cube"><g class="ae-blk" style="--i:0"><polygon points="0.0,-24.0 26.0,-9.0 0.0,6.0 -26.0,-9.0" fill="#c9a6ff"/><polygon points="-26.0,21.0 0.0,36.0 0.0,6.0 -26.0,-9.0" fill="url(#aeL)"/><polygon points="26.0,21.0 0.0,36.0 0.0,6.0 26.0,-9.0" fill="url(#aeR)"/></g><g class="ae-blk" style="--i:1"><polygon points="0.0,-57.5 26.0,-42.5 0.0,-27.5 -26.0,-42.5" fill="#c9a6ff"/><polygon points="-26.0,-12.5 0.0,2.5 0.0,-27.5 -26.0,-42.5" fill="url(#aeL)"/><polygon points="26.0,-12.5 0.0,2.5 0.0,-27.5 26.0,-42.5" fill="url(#aeR)"/></g><g class="ae-blk" style="--i:2"><polygon points="-29.0,-7.2 -3.0,7.8 -29.0,22.8 -55.0,7.8" fill="#c9a6ff"/><polygon points="-55.0,37.8 -29.0,52.8 -29.0,22.8 -55.0,7.8" fill="url(#aeL)"/><polygon points="-3.0,37.8 -29.0,52.8 -29.0,22.8 -3.0,7.8" fill="url(#aeR)"/></g><g class="ae-blk" style="--i:3"><polygon points="29.0,-7.2 55.0,7.8 29.0,22.8 3.0,7.8" fill="#c9a6ff"/><polygon points="3.0,37.8 29.0,52.8 29.0,22.8 3.0,7.8" fill="url(#aeL)"/><polygon points="55.0,37.8 29.0,52.8 29.0,22.8 55.0,7.8" fill="url(#aeR)"/></g><g class="ae-blk" style="--i:4"><polygon points="-29.0,-40.8 -3.0,-25.8 -29.0,-10.8 -55.0,-25.8" fill="#c9a6ff"/><polygon points="-55.0,4.2 -29.0,19.2 -29.0,-10.8 -55.0,-25.8" fill="url(#aeL)"/><polygon points="-3.0,4.2 -29.0,19.2 -29.0,-10.8 -3.0,-25.8" fill="url(#aeR)"/></g><g class="ae-blk" style="--i:5"><polygon points="29.0,-40.8 55.0,-25.8 29.0,-10.8 3.0,-25.8" fill="#c9a6ff"/><polygon points="3.0,4.2 29.0,19.2 29.0,-10.8 3.0,-25.8" fill="url(#aeL)"/><polygon points="55.0,4.2 29.0,19.2 29.0,-10.8 55.0,-25.8" fill="url(#aeR)"/></g><g class="ae-blk" style="--i:6"><polygon points="0.0,9.5 26.0,24.5 0.0,39.5 -26.0,24.5" fill="#c9a6ff"/><polygon points="-26.0,54.5 0.0,69.5 0.0,39.5 -26.0,24.5" fill="url(#aeL)"/><polygon points="26.0,54.5 0.0,69.5 0.0,39.5 26.0,24.5" fill="url(#aeR)"/></g><polygon class="ae-slot" points="0.0,6.0 26.0,21.0 0.0,36.0 -26.0,21.0" fill="url(#aeGlow)"/><g class="ae-blk ae-hero" style="--i:7"><g class="ae-hero-lift">
           <polygon points="0.0,-24.0 26.0,-9.0 0.0,6.0 -26.0,-9.0" fill="#c9a6ff"/><polygon points="-26.0,21.0 0.0,36.0 0.0,6.0 -26.0,-9.0" fill="url(#aeL)"/><polygon points="26.0,21.0 0.0,36.0 0.0,6.0 26.0,-9.0" fill="url(#aeR)"/>
           <g class="ae-teal"><polygon points="0.0,-24.0 26.0,-9.0 0.0,6.0 -26.0,-9.0" fill="#b9fff3"/><polygon points="-26.0,21.0 0.0,36.0 0.0,6.0 -26.0,-9.0" fill="url(#aeTL)"/><polygon points="26.0,21.0 0.0,36.0 0.0,6.0 26.0,-9.0" fill="url(#aeTR)"/></g>
@@ -52,19 +57,29 @@
         <div class="ae-bar"><div class="ae-fill" id="ae-fill"></div></div>
         <div class="ae-status" id="ae-status">Loading fonts</div>
       </div>
-      <div class="ae-tap" id="ae-tap">Tap to continue</div>
     </div>
 
-    <div class="sl-title" id="streamly-title">
-      <div class="sl-mark">
-        <svg viewBox="0 0 64 64" aria-hidden="true">
-          <defs><linearGradient id="slBlue" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5b9bff"/><stop offset="1" stop-color="#1d4ed8"/></linearGradient></defs>
-          <rect class="sl-box" x="4" y="4" width="56" height="56" rx="15" pathLength="1"/>
-          <path class="sl-play" d="M26 20v24l20-12z"/>
-        </svg>
+    <div class="st2" id="streamly-title">
+      <div class="st2-wall" aria-hidden="true"><div class="st2-cols"><div class="st2-col" id="st2-col-a"></div><div class="st2-col b" id="st2-col-b"></div><div class="st2-col" id="st2-col-c"></div></div></div>
+      <div class="st2-left">
+        <div class="st2-mark"><span class="st2-ring"></span><span class="st2-ring r2"></span>
+          <svg class="st2-logo" viewBox="0 0 64 64" aria-hidden="true">
+            <defs>
+              <linearGradient id="st2Blue" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6aa8ff"/><stop offset="1" stop-color="#1d4ed8"/></linearGradient>
+              <linearGradient id="st2Shine" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+              <clipPath id="st2Clip"><rect x="4" y="4" width="56" height="56" rx="17"/></clipPath>
+            </defs>
+            <rect class="st2-box" x="4" y="4" width="56" height="56" rx="17" fill="url(#st2Blue)"/>
+            <g clip-path="url(#st2Clip)"><rect class="st2-shine" x="-40" y="0" width="30" height="64" fill="url(#st2Shine)" transform="skewX(-20)"/></g>
+            <g fill="#fff" stroke="#fff" stroke-width="2.2" stroke-linejoin="round">
+              <polygon class="st2-seg" style="--s:0" points="22.00,17.00 29.27,21.04 29.27,42.96 22.00,47.00"/><polygon class="st2-seg" style="--s:1" points="31.87,22.48 39.13,26.52 39.13,37.48 31.87,41.52"/><polygon class="st2-seg" style="--s:2" points="41.73,27.96 49.00,32.00 41.73,36.04"/>
+            </g>
+          </svg>
+        </div>
+        <div class="st2-word"><span class="st2-l" style="--k:0">S</span><span class="st2-l" style="--k:1">t</span><span class="st2-l" style="--k:2">r</span><span class="st2-l" style="--k:3">e</span><span class="st2-l" style="--k:4">a</span><span class="st2-l" style="--k:5">m</span><span class="st2-l" style="--k:6">l</span><span class="st2-l" style="--k:7">y</span><span class="st2-sim">SIM</span></div>
+        <div class="st2-tag">Build a channel from zero.</div>
+        <div class="st2-count"><span class="st2-dot"></span><b id="st2-num">0</b><span>subscribers</span></div>
       </div>
-      <div class="sl-word"><span class="sl-l" style="--d:1.00s">S</span><span class="sl-l" style="--d:1.07s">t</span><span class="sl-l" style="--d:1.14s">r</span><span class="sl-l" style="--d:1.21s">e</span><span class="sl-l" style="--d:1.28s">a</span><span class="sl-l" style="--d:1.35s">m</span><span class="sl-l" style="--d:1.42s">l</span><span class="sl-l" style="--d:1.49s">y</span><span class="sl-sim">Sim</span></div>
-      <div class="sl-tag">Build a channel from zero.</div>
     </div>
   </div>
 
@@ -78,7 +93,7 @@
   <div class="app">
     <aside class="sidebar">
       <div class="brand">
-        <div class="brand-mark"><svg viewBox="0 0 24 24"><path d="M9 6.5v11l9-5.5z"/></svg></div>
+        <div class="brand-mark"><svg viewBox="0 0 24 24"><g fill="#fff" stroke="#fff" stroke-width=".8" stroke-linejoin="round"><polygon points="8.25,6.38 10.97,7.89 10.97,16.11 8.25,17.62"/><polygon points="11.95,8.43 14.68,9.94 14.68,14.06 11.95,15.57"/><polygon points="15.65,10.49 18.38,12.00 15.65,13.51"/></g></svg></div>
         <div class="brand-name">Streamly<em>Sim</em></div>
       </div>
 

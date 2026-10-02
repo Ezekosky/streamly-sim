@@ -433,7 +433,7 @@ function unlockAudio(){
     audioUnlocked = true;
     if (window.Music){
       Music.attach(audioCtx);
-      if (state.musicEnabled) Music.start();
+      if (state.musicEnabled && !window.__bootActive) Music.start(); // the loader has its own soundtrack
     }
   } catch(e){ /* Web Audio unavailable in this environment — sound just stays off */ }
 }
@@ -4469,64 +4469,205 @@ function safeRenderAll(){
    setProgress(n) calls from actual load events.
    ========================================================================= */
 (function bootLoader(){
+  /* AetherEdge Studios splash (~6.3s) -> Streamly title card (~4.3s) -> game.
+     Real loading drives the bar; a synthesized soundtrack and a particle layer
+     follow the animation. No tap-to-skip: a tap only switches sound on if the
+     browser blocked it. */
   const $ = (id) => document.getElementById(id);
-  /* AetherEdge Studios splash, then the Streamly title card, then the game.
-     The animation runs ~3.3s; the progress bar and status line follow real work:
-     fonts loading, then the game itself starting up behind the splash. */
+  window.__bootActive = true;
   const root = $('boot-loader');
-  const fill = $('ae-fill'), status = $('ae-status'), tap = $('ae-tap');
+  const fill = $('ae-fill'), status = $('ae-status');
   const REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const ANIM_MS = REDUCED ? 300 : 6300;   // ~6s studio sequence
-  let ready = false, animDone = false, leaving = false;
+  const STUDIO_MS = REDUCED ? 600 : 6300, TITLE_MS = REDUCED ? 800 : 4300;
+  let ready = false, studioDone = false, leaving = false;
+  const t0 = performance.now();
   const setProgress = (pct, text) => { fill.style.width = pct + '%'; if (text) status.textContent = text; };
 
+  /* ---------------- sound ---------------- */
+  let soundOn = true;
+  try { const sv = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); if (sv && sv.soundEnabled === false) soundOn = false; } catch(e){}
+  const AC = window.AudioContext || window.webkitAudioContext;
+  let ac = null, master = null, noise = null;
+  if (AC && soundOn && !REDUCED){
+    try {
+      ac = new AC(); master = ac.createGain(); master.gain.value = 0.42; master.connect(ac.destination);
+      noise = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
+      const d = noise.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    } catch(e){ ac = null; }
+  }
+  const live = () => ac && ac.state === 'running';
+  function tone(freq, start, dur, type, vol, freqEnd, attack){
+    const o = ac.createOscillator(), g = ac.createGain(), t = ac.currentTime + start;
+    o.type = type || 'sine'; o.frequency.setValueAtTime(freq, t);
+    if (freqEnd) o.frequency.exponentialRampToValueAtTime(freqEnd, t + dur);
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + (attack || 0.008)); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(master); o.start(t); o.stop(t + dur + 0.05);
+  }
+  function hiss(start, dur, vol, type, f0, f1, q){
+    const src = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain(), t = ac.currentTime + start;
+    src.buffer = noise; f.type = type; f.Q.value = q || 0.8; f.frequency.setValueAtTime(f0, t); if (f1) f.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + dur * 0.35); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(f).connect(g).connect(master); src.start(t, Math.random() * 0.4); src.stop(t + dur + 0.05);
+  }
+  const SFX = {
+    pad(){ [220, 261.63, 329.63, 392, 493.88].forEach((f, i) => tone(f, i * 0.04, 6.2, 'triangle', 0.035, null, 1.6)); tone(110, 0, 6.2, 'sine', 0.06, null, 1.8); },
+    whoosh(dur, f0, f1, vol){ hiss(0, dur, vol || 0.12, 'bandpass', f0, f1, 1.2); },
+    thock(i){ const f = 150 * Math.pow(1.06, i); tone(f, 0, 0.16, 'sine', 0.32, f * 0.45); hiss(0, 0.05, 0.08, 'highpass', 2500); },
+    chime(){ [659.25, 830.61, 987.77, 1318.5].forEach((f, i) => { tone(f, i * 0.07, 1.4, 'sine', 0.09); tone(f * 2.01, i * 0.07, 0.6, 'sine', 0.025); }); },
+    rise(){ tone(380, 0, 0.55, 'sine', 0.08, 980, 0.05); hiss(0, 0.6, 0.06, 'bandpass', 900, 5000, 1.5); },
+    resolve(){ [220, 277.18, 329.63, 440, 554.37].forEach((f, i) => tone(f, i * 0.02, 2.6, 'triangle', 0.05, null, 0.05)); tone(880, 0.05, 1.6, 'sine', 0.05); },
+    pop(){ tone(520, 0, 0.18, 'sine', 0.22, 980); tone(1040, 0.02, 0.12, 'triangle', 0.05); },
+    seg(i){ tone(700 + i * 160, 0, 0.09, 'triangle', 0.08, 900 + i * 180); },
+    tick(){ tone(1600 + Math.random() * 300, 0, 0.03, 'square', 0.018); },
+    ding(){ tone(1318.5, 0, 1.6, 'sine', 0.14); tone(2637, 0, 0.8, 'sine', 0.04); tone(659.25, 0.01, 1.4, 'triangle', 0.05); },
+  };
+  // fire a cue at an offset from the start of a section; skipped if sound isn't on yet by then
+  const cue = (atMs, fn, base) => setTimeout(() => { if (live()) try { fn(); } catch(e){} }, Math.max(0, atMs - (performance.now() - (base || t0))));
+  // browsers can block audio until the first tap: show a small speaker; a tap anywhere switches sound on
+  let soundBtn = null;
+  if (ac && ac.state !== 'running'){
+    ac.resume().catch(() => {});
+    setTimeout(() => {
+      if (live()) return;
+      soundBtn = document.createElement('div');
+      soundBtn.className = 'boot-sound show';
+      soundBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="m22 9-6 6M16 9l6 6"/></svg>';
+      root.appendChild(soundBtn);
+    }, 250);
+  }
+  const wake = () => { if (ac && ac.state !== 'running') ac.resume().then(() => { if (soundBtn) soundBtn.classList.remove('show'); }).catch(() => {}); };
+  root.addEventListener('pointerdown', wake); window.addEventListener('keydown', wake);
+
+  /* ---------------- particles ---------------- */
+  const amb = $('ae-amb');
+  const cv = document.createElement('canvas'); amb.appendChild(cv);
+  const cx = cv.getContext('2d');
+  let W = 0, H = 0, dpr = Math.min(2, window.devicePixelRatio || 1);
+  const size = () => { W = root.clientWidth; H = root.clientHeight; cv.width = W * dpr; cv.height = H * dpr; cx.setTransform(dpr, 0, 0, dpr, 0, 0); };
+  size(); window.addEventListener('resize', size);
+  const dots = Array.from({ length: REDUCED ? 0 : 70 }, () => ({ x: Math.random(), y: Math.random(), r: 0.6 + Math.random() * 1.6, s: 0.00004 + Math.random() * 0.00012, a: 0.15 + Math.random() * 0.45, c: Math.random() < 0.25 ? '63,227,207' : '139,92,246' }));
+  const sparks = [];
+  function burst(x, y, color, n, speed){
+    for (let i = 0; i < n; i++){
+      const a = Math.random() * Math.PI * 2, v = (speed || 1.6) * (0.4 + Math.random());
+      sparks.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 0.8, life: 1, c: color, r: 1 + Math.random() * 1.8 });
+    }
+  }
+  let rafOn = true;
+  (function frame(){
+    if (!rafOn) return;
+    cx.clearRect(0, 0, W, H);
+    dots.forEach(d => { d.y -= d.s * 16; if (d.y < -0.02) d.y = 1.02; cx.beginPath(); cx.arc(d.x * W, d.y * H, d.r, 0, 6.283); cx.fillStyle = `rgba(${d.c},${d.a})`; cx.fill(); });
+    for (let i = sparks.length - 1; i >= 0; i--){
+      const p = sparks[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.06; p.life -= 0.022;
+      if (p.life <= 0){ sparks.splice(i, 1); continue; }
+      cx.beginPath(); cx.arc(p.x, p.y, p.r * p.life + 0.3, 0, 6.283); cx.fillStyle = `rgba(${p.c},${p.life})`; cx.fill();
+    }
+    requestAnimationFrame(frame);
+  })();
+  const at = (el, fx, fy) => { const r = el.getBoundingClientRect(), rr = root.getBoundingClientRect(); return [r.left - rr.left + r.width * fx, r.top - rr.top + r.height * fy]; };
+
+  /* ---------------- studio timeline (matches the CSS delays) ---------------- */
+  if (!REDUCED){
+    cue(80, () => SFX.pad());
+    cue(200, () => SFX.whoosh(1.25, 300, 2600, 0.1));
+    const blocks = [...document.querySelectorAll('.ae-blk')];
+    blocks.forEach((b, i) => {
+      const land = 1200 + i * 200 + 330;
+      setTimeout(() => { const [x, y] = at(b, 0.5, 0.85); burst(x, y, '167,139,250', 7, 1.2); }, land);
+      cue(land, () => SFX.thock(i));
+    });
+    setTimeout(() => { const hero = document.querySelector('.ae-hero'); if (hero){ const [x, y] = at(hero, 0.5, 0.5); burst(x, y, '94,234,212', 26, 2.2); } }, 3400);
+    cue(3300, () => SFX.chime());
+    cue(3420, () => SFX.rise());
+    cue(3900, () => SFX.whoosh(0.9, 600, 4000, 0.07));
+    cue(5000, () => SFX.resolve());
+  }
+
+  /* ---------------- real loading ---------------- */
   async function load(){
-    // 1. fonts: the splash wordmark, then the game's UI font (never wait more than ~2.5s)
     setProgress(8, 'Loading fonts');
-    const fontJobs = ['400 14px Inter', '500 14px Inter', '600 14px Inter', '700 14px Inter'];
+    const fontJobs = ['400 14px Inter', '500 14px Inter', '600 14px Inter', '800 14px Inter'];
     let done = 0;
-    const timeout = new Promise(r => setTimeout(r, 2500));
     try {
       if (document.fonts && document.fonts.load){
         await Promise.race([
           Promise.all(fontJobs.map(f => document.fonts.load(f).then(() => { done++; setProgress(8 + Math.round(done / fontJobs.length * 37)); }).catch(() => {}))),
-          timeout,
+          new Promise(r => setTimeout(r, 2500)),
         ]);
       }
     } catch(e){}
-    // 2. the game: read the save, build every tab, warm the thumbnail cache (all behind the splash)
     setProgress(50, 'Opening your studio');
-    await new Promise(r => setTimeout(r, 30));     // let the bar paint before the heavy work
-    try { init(); } catch(e){ console.error(e); }
-    setProgress(85);
     await new Promise(r => setTimeout(r, 30));
+    try { init(); } catch(e){ console.error(e); }
+    setProgress(75);
+    await new Promise(r => setTimeout(r, 30));
+    // fill the Streamly title card's thumbnail wall now, while the studio logo is still playing
+    try { buildWall(); } catch(e){ console.error(e); }
     try { if (typeof safeRenderAll === 'function') safeRenderAll(); } catch(e){}
-    // 3. done
     setProgress(100, 'Ready');
     ready = true;
-    if (!animDone) tap.classList.add('show');
     maybeLeave();
   }
+  function buildWall(){
+    const topics = ['gaming', 'comedy', 'football', 'tech', 'cooking', 'lifestyle'];
+    const styles = ['shock', 'funny', 'action', 'gameplay', 'clean', 'funny', 'shock', 'action'];
+    const faces = ['PixelQueen', 'TechMaster', 'LifestyleLuna', 'ComedyCentral_', 'FootballZone', 'ChefAmara', 'GamingHub', 'CookingKing', 'Marcus Plays'];
+    const tile = (i) => {
+      const topic = topics[i % topics.length];
+      const bank = (TITLE_BANK[topic] || ['New video']);
+      const d = 60 * (2 + (i * 7) % 23) + (i * 17) % 60;
+      return `<div class="st2-th">${thumbSVG({ seed: 'boot' + i, topic, style: styles[i % styles.length], title: bank[(i * 5) % bank.length], face: faces[i % faces.length] })}<span class="d">${Math.floor(d / 60)}:${String(d % 60).padStart(2, '0')}</span></div>`;
+    };
+    ['st2-col-a', 'st2-col-b', 'st2-col-c'].forEach((id, c) => {
+      const el = $(id); if (!el) return;
+      const tiles = []; for (let k = 0; k < 6; k++) tiles.push(tile(c * 6 + k));
+      el.innerHTML = tiles.join('') + tiles.join('');   // doubled so the scroll loops seamlessly
+    });
+  }
 
-  function maybeLeave(){ if (ready && animDone) toGame(); }
+  /* ---------------- Streamly title card ---------------- */
+  function maybeLeave(){ if (ready && studioDone) toGame(); }
   function toGame(){
     if (leaving) return;
     leaving = true;
-    tap.classList.remove('show');
-    root.classList.add('to-game');                 // studio fades out, Streamly title card plays
-    const titleMs = REDUCED ? 400 : 3200;   // Streamly title card
-    setTimeout(() => {
-      root.classList.add('hide');
-      setTimeout(() => { root.style.display = 'none'; }, 480);
-    }, titleMs);
+    root.classList.add('to-game');
+    const T = performance.now();
+    if (!REDUCED){
+      cue(100, () => SFX.whoosh(1.0, 200, 1800, 0.12), T);
+      cue(420, () => SFX.pop(), T);
+      [0, 1, 2].forEach(i => cue(900 + i * 140, () => SFX.seg(i), T));
+      cue(1250, () => SFX.whoosh(0.7, 1200, 6000, 0.05), T);
+      cue(1880, () => SFX.pop(), T);
+      // subscriber counter: 0 -> 1,000,000 with ticks that slow down as it lands
+      const num = $('st2-num');
+      setTimeout(() => {
+        const start = performance.now(), DUR = 1500, TARGET = 1000000;
+        let lastTick = 0;
+        (function step(){
+          const k = Math.min(1, (performance.now() - start) / DUR), e = 1 - Math.pow(1 - k, 3);
+          num.textContent = Math.round(TARGET * e).toLocaleString();
+          if (live() && performance.now() - lastTick > 60 + k * 120){ lastTick = performance.now(); SFX.tick(); }
+          if (k < 1) requestAnimationFrame(step); else if (live()) SFX.ding();
+        })();
+      }, 2350);
+    } else {
+      const num = $('st2-num'); if (num) num.textContent = '1,000,000';
+    }
+    setTimeout(finish, TITLE_MS);
   }
-  // tap to skip, but only once everything has actually loaded
-  root.addEventListener('click', () => {
-    if (!ready) return;
-    if (!root.classList.contains('to-game')) toGame();
-    else { root.classList.add('hide'); setTimeout(() => { root.style.display = 'none'; }, 480); }
-  });
-  setTimeout(() => { animDone = true; maybeLeave(); }, ANIM_MS);
+  function finish(){
+    root.classList.add('hide');
+    setTimeout(() => {
+      root.style.display = 'none';
+      rafOn = false;
+      window.__bootActive = false;
+      if (master && ac){ try { master.gain.linearRampToValueAtTime(0, ac.currentTime + 0.4); setTimeout(() => ac.close(), 600); } catch(e){} }
+      // hand over to the game's own music if sound has been unlocked
+      try { if (audioUnlocked && state.musicEnabled && window.Music){ Music.attach(audioCtx); Music.start(); } } catch(e){}
+    }, 480);
+  }
+  setTimeout(() => { studioDone = true; maybeLeave(); }, STUDIO_MS);
   try { localStorage.setItem('streamly_booted', '1'); } catch(e){}
   load();
 })();
