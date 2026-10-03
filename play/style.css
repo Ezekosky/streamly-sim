@@ -2309,3 +2309,82 @@ body{ font-size:13px; }
   .ae-splash, .ae-logo, .ae-halo, .ae-word::after, .st2 *, .st2-col{ animation:none !important; }
   .st2-box, .st2-seg, .st2-l, .st2-sim, .st2-tag, .st2-count, .st2-cols{ opacity:1 !important; transform:none !important; filter:none !important; }
 }
+
+/* ---- video analytics: chart can never spill into the comments; narrow screens stack ---- */
+.va-chart-box{ overflow:hidden; }
+.va-chart{ position:relative; display:block; height:160px; }
+.va-y{ position:absolute; left:0; top:0; bottom:0; width:40px; padding:2px 0; }
+.va-plot{ position:absolute; left:44px; right:0; top:4px; bottom:4px; }
+.va-plot svg{ position:absolute; inset:0; width:100%; height:100%; }
+.va-x{ position:relative; }
+.va-comments{ position:relative; z-index:1; margin-top:4px; }
+.video-box{ max-width:96vw; overflow-x:hidden; }
+.va-title{ overflow-wrap:anywhere; }
+.va-status{ flex-wrap:wrap; }
+@media (max-width:640px){
+  .va-head{ grid-template-columns:1fr; }
+  .va-grid{ grid-template-columns:repeat(2, minmax(0,1fr)); }
+  .va-tabs{ flex-wrap:wrap; }
+}
+
+/* =========================================================================
+   LIGHT MODE (Settings → Appearance). The loader keeps its own dark look.
+   ========================================================================= */
+.theme-chips{ display:flex; gap:6px; flex-wrap:wrap; }
+.theme-chip{ padding:7px 13px; border-radius:99px; border:1px solid var(--border); background:var(--surface); color:var(--dim); font-family:var(--font-body); font-size:12.5px; font-weight:500; cursor:pointer; }
+.theme-chip.on{ border-color:var(--accent); background:var(--accent-soft); color:var(--text); }
+
+:root[data-theme="light"]{
+  --bg:          #f5f6f8;
+  --surface:     #ffffff;
+  --surface-2:   #f0f2f5;
+  --surface-3:   #e4e7ec;
+  --border:      #d6dae1;
+  --border-soft: #e6e9ee;
+  --text:        #10131a;
+  --dim:         #4b5363;
+  --faint:       #7b8394;
+  --accent:      #2563eb;
+  --accent-2:    #1d4ed8;
+  --accent-soft: rgba(37, 99, 235, .1);
+  --gain:        #15803d;
+  --gain-soft:   rgba(21, 128, 61, .1);
+  --warn:        #c2410c;
+  --warn-soft:   rgba(194, 65, 12, .1);
+  --live:        #dc2626;
+  --live-soft:   rgba(220, 38, 38, .1);
+  --info:        #2563eb;
+  --info-soft:   rgba(37, 99, 235, .1);
+  --pink:        #7c3aed;
+  --pink-soft:   rgba(124, 58, 237, .1);
+  color-scheme: light;
+}
+[data-theme="light"] body{ background:var(--bg); color:var(--text); }
+[data-theme="light"] .sidebar{ background:#ffffff; border-color:var(--border-soft); }
+[data-theme="light"] .topbar{ background:rgba(245,246,248,.92); border-color:var(--border-soft); }
+[data-theme="light"] .panel-box, [data-theme="light"] .stat-card, [data-theme="light"] .equip-card,
+[data-theme="light"] .feed-item, [data-theme="light"] .pl-card, [data-theme="light"] .topic-tile, [data-theme="light"] .format-tile{ box-shadow:0 1px 2px rgba(16,19,26,.05); }
+/* primary buttons flip to dark-on-light */
+[data-theme="light"] .create-video-btn, [data-theme="light"] .upload-btn, [data-theme="light"] .follow-btn,
+[data-theme="light"] .modal-close, [data-theme="light"] .collab-btn.ready, [data-theme="light"] .tut-next{ background:#10131a; color:#fff; }
+[data-theme="light"] .create-video-btn:hover, [data-theme="light"] .upload-btn:hover:not(:disabled), [data-theme="light"] .modal-close:hover{ background:#262b36; }
+[data-theme="light"] .create-video-btn svg.ic, [data-theme="light"] .upload-btn svg.ic{ stroke:#fff; }
+[data-theme="light"] .modal-close.secondary, [data-theme="light"] .modal-btn-row .modal-close.cancel{ background:var(--surface-2); color:var(--text); }
+[data-theme="light"] .modal-btn-row .modal-close.confirm-delete{ background:var(--live); }
+[data-theme="light"] .follow-btn.following{ background:var(--surface-2); color:var(--dim); }
+[data-theme="light"] .modal-overlay{ background:rgba(16,19,26,.45); }
+[data-theme="light"] .modal-box{ box-shadow:0 20px 50px rgba(16,19,26,.18); }
+[data-theme="light"] .perf-tooltip{ background:#10131a; color:#fff; }
+[data-theme="light"] .energy-line{ background:#10131a; }
+[data-theme="light"] .energy-cost{ background:repeating-linear-gradient(135deg, rgba(255,255,255,.75) 0 3px, transparent 3px 6px); }
+[data-theme="light"] .toast{ background:#10131a; color:#fff; border-color:#10131a; }
+[data-theme="light"] .day-chip{ background:var(--surface); border:1px solid var(--border-soft); }
+[data-theme="light"] .range-tabs, [data-theme="light"] .va-tabs{ background:var(--surface-3); }
+[data-theme="light"] .range-tab.active, [data-theme="light"] .va-tabs .range-tab.active{ background:var(--surface); box-shadow:0 1px 2px rgba(16,19,26,.08); }
+[data-theme="light"] .tut-hole{ box-shadow:0 0 0 9999px rgba(16,19,26,.55); }
+[data-theme="light"] .switch{ background:var(--surface-3); }
+[data-theme="light"] .lu-meter-track, [data-theme="light"] .meter-track, [data-theme="light"] .xp-track, [data-theme="light"] .energy-track{ background:var(--surface-3); }
+[data-theme="light"] .rotate-gate{ background:var(--bg); }
+[data-theme="light"] .ct-hot{ color:#b91c1c; background:rgba(220,38,38,.1); }
+[data-theme="light"] .lc-line.sc{ color:var(--text); }
+@media (max-width:640px){ [data-theme="light"] .sidebar{ background:#ffffff; } }

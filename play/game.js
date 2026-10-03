@@ -580,6 +580,7 @@ let state = {
   hourlySubs: [], hourlyWatch: [], currentHourSubs: 0, currentHourWatch: 0,
   fanFunding: false,
   tutorialDone: false,
+  theme: 'dark',
   cadence: 'casual', cadStreak: 0, cadDayCount: 0,  // upload plan + streak (see cadence.js)
   live: null,              // the stream in progress, if any
   streamCount: 0, bestStreamPeak: 0, superChatRevenue: 0,
@@ -780,11 +781,12 @@ function variantCTR(thumbKey, topicKey, titleStyle, format, algorithmScore, loya
 
 /* Average share of a video people actually watch. Retention (the algorithm's view of how well
    a video holds people) stays the same; longer videos just get watched less of the way through. */
-const LENGTH_VIEW_FACTOR = { m3: 0.92, m8: 0.78, m15: 0.66, m25: 0.56 };
+const LENGTH_VIEW_FACTOR = { m3: 0.86, m8: 0.68, m15: 0.55, m25: 0.45 };
+const BOUNCE_FACTOR = 0.85; // ~15% of views leave in the first few seconds (wrong click, wrong video)
 function viewFraction(v){
   const r = (v.retention || 0) / 100;
-  if (v.format === 'shorts') return clamp(r, 0, 1);
-  return clamp(r * (LENGTH_VIEW_FACTOR[v.length] || 0.75), 0, 1);
+  if (v.format === 'shorts') return clamp(r * 0.92, 0, 1);
+  return clamp(r * (LENGTH_VIEW_FACTOR[v.length] || 0.6) * BOUNCE_FACTOR, 0, 1);
 }
 function calcWatchTimeSec(v){ return Math.round((v.durationSec || 0) * viewFraction(v)); }
 function shownRetention(v){ return Math.round(viewFraction(v) * 100); }
@@ -3799,6 +3801,21 @@ function switchTab(tab){
   });
   if (tab === 'settings') renderSettings();
 }
+/* ---------- Appearance: dark / light / system ---------- */
+function resolvedTheme(){
+  const t = state.theme || 'dark';
+  if (t === 'system') return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  return t;
+}
+function applyTheme(){
+  const t = resolvedTheme();
+  document.documentElement.setAttribute('data-theme', t);
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', t === 'light' ? '#f6f7f9' : '#0f2527');
+  document.querySelectorAll('[data-theme-pick]').forEach(b => b.classList.toggle('on', b.dataset.themePick === (state.theme || 'dark')));
+}
+if (window.matchMedia) window.matchMedia('(prefers-color-scheme: light)').addEventListener && window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => { if (state.theme === 'system') applyTheme(); });
+
 function renderSettings(){
   const el = document.getElementById('settings-level');
   if (!el) return;
@@ -3927,6 +3944,7 @@ function sanitizeState(){
     }
   }
   if (!CADENCES[state.cadence]) state.cadence = 'casual';
+  if (!['dark', 'light', 'system'].includes(state.theme)) state.theme = 'dark';
   state.cadStreak = num(state.cadStreak, 0); state.cadDayCount = num(state.cadDayCount, 0);
   if (typeof state.tutorialDone !== 'boolean'){
     // Existing players aren't forced through the tour; they get told it exists.
@@ -4349,6 +4367,13 @@ function startGame(hadSave){
     });
   });
 
+  document.getElementById('theme-chips').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-theme-pick]');
+    if (!b) return;
+    state.theme = b.dataset.themePick;
+    playClickSound(); applyTheme(); saveState();
+    safeRenderAll();
+  });
   document.getElementById('set-sound').addEventListener('click', () => { toggleSound(); renderSettings(); });
   document.getElementById('set-music').addEventListener('click', () => { toggleMusic(); renderSettings(); });
   document.getElementById('settings-btn').addEventListener('click', () => { playClickSound(); switchTab('settings'); });
@@ -4436,6 +4461,7 @@ function startGame(hadSave){
   initLiveUI();
   initCtypeUI();
   initCadenceUI();
+  applyTheme();
   publishDueVideos();
   refreshIdentity(false);
   const idClose = document.getElementById('identity-close');

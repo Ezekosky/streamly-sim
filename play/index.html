@@ -13,6 +13,13 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+<script>
+  (function(){ try {
+    var s = JSON.parse(localStorage.getItem('streamlySimSave_v2') || 'null'), t = s && s.theme || 'dark';
+    if (t === 'system') t = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', t);
+  } catch(e){ document.documentElement.setAttribute('data-theme', 'dark'); } })();
+</script>
 <!--
   REAL ADS, option A — Google AdSense H5 Games Ads, for a copy hosted on YOUR OWN domain
   (e.g. streamly.yourname.com on Vercel). Needs an approved AdSense account + H5 Games Ads approval.
@@ -336,7 +343,7 @@
         <div class="panel-box recent-panel">
           <div class="spark-head">
             <h3 style="margin:0;">Recent Videos</h3>
-            <a class="full-analytics-link" href="javascript:void(0)" onclick="switchTab('studio')">View all
+            <a class="full-analytics-link" href="javascript:void(0)" onclick="switchTab('content')">View all
               <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px"><path d="M9 6l6 6-6 6"/></svg>
             </a>
           </div>
@@ -842,6 +849,17 @@
           </div>
         </div>
         <div class="settings-col">
+          <div class="panel-box">
+            <h3>Appearance</h3>
+            <div class="set-row">
+              <div><div class="set-name">Theme</div><div class="set-sub">Light, dark, or follow your device</div></div>
+              <div class="theme-chips" id="theme-chips">
+                <button class="theme-chip" data-theme-pick="dark">Dark</button>
+                <button class="theme-chip" data-theme-pick="light">Light</button>
+                <button class="theme-chip" data-theme-pick="system">System</button>
+              </div>
+            </div>
+          </div>
           <div class="panel-box">
             <h3>Audio</h3>
             <div class="set-row">
