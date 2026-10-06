@@ -5,7 +5,7 @@
 
 const SAVE_KEY = "streamlySimSave_v2";
 const TESTING_TICKS = 10;              // Phase 1 length, per GDD ("first 10 minutes")
-const MAX_OFFLINE_TICKS = 8 * 60 * 60; // cap offline sim at 8 game-hours worth of ticks
+const MAX_OFFLINE_TICKS = 8 * 60 * 60; // cap offline sim at 8 real hours away (= 28,800 game minutes, 20 game days)
 const EVENT_CHECK_MS = 15000;          // how often we roll for a random world event
 const EVENT_CHANCE = 0.16;             // chance a random world event fires on each check
 const DAY_TICKS = 1440;                // 1 in-game day = 1440 in-game minutes
@@ -223,6 +223,7 @@ const XP_RULES = [
   { key: 'collab',    label: 'Collab goes live',           xp: '+120' },
   { key: 'abtest',    label: 'A/B test resolved',          xp: '+30' },
   { key: 'live',      label: 'Go live',                    xp: '+60, then +1 per 5 peak viewers' },
+  { key: 'social',    label: 'Post on Pulse',              xp: '+10' },
 ];
 const XP_UPLOAD = { quick: 25, standard: 40, polished: 60 };
 const LEVEL_CASH_BONUS = level => 25 * level;
@@ -647,11 +648,14 @@ function pushTransaction(type, label, amount){
 
 /* ---------- Audience mood: which topics are hot today, regenerates once per in-game day ---------- */
 function ensureAudienceMood(){
-  const day = Math.floor(state.totalTicks / DAY_TICKS);
+  const day = clockDay();
   if (!state.audienceMood || state.audienceMood.day !== day){
+    // the day plays out close to the Calendar's forecast, give or take a few points
+    const fc = typeof forecastMoods === 'function' ? forecastMoods(day) : null;
     const moods = {};
-    Object.keys(TOPICS).forEach(k => { moods[k] = Math.round(rand(-25, 35)); });
+    Object.keys(TOPICS).forEach(k => { moods[k] = fc && typeof fc[k] === 'number' ? clamp(Math.round(fc[k] + rand(-4, 4)), -25, 35) : Math.round(rand(-25, 35)); });
     state.audienceMood = { day, moods };
+    if (typeof reviseForecasts === 'function') reviseForecasts(day);
     const [bestKey, bestVal] = Object.entries(moods).sort((a, b) => b[1] - a[1])[0];
     if (bestVal >= 20){
       showToast(ic('fire') + ` ${TOPICS[bestKey].label} is trending today (+${bestVal}%)`, true);
@@ -868,6 +872,7 @@ function createVideo(topicKey, thumbKey, lengthKey, effortKey, titleStyleKey, fo
     publishPhase: 'live', // overwritten to 'uploading' by the upload sequence for a freshly-created video
   };
 
+  video.madeAt = state.totalTicks; video.moodAtMake = moodPct; video.crowdAtMake = (state.topicCrowd || {})[topicKey] || 0;   // re-judged if it's scheduled for another day
   applyContentTypePre(video, extras.ctype);   // what the video is about: challenge, guide, review...
   applyIdentityPre(video);                    // what your channel is known for
   deriveVideoFlavor(video); // sets entertainment/educational/satisfaction/watchTime + generates comments
@@ -1028,7 +1033,7 @@ function decideOutcome(v){
     triggerHypeMusic();
   } else {
     outcomeType = "normal";
-    v.baseRate = 14 + score * 1.0 + Math.min(state.subs * 0.001, 400) * (v.notifyShare || 1); // subscribers see it on day one (less so if you've flooded their feed)
+    v.baseRate = 14 + score * 1.0 + Math.min(state.subs * 0.001, 400) * (v.notifyShare || 1) * (typeof demoFanMult === 'function' ? demoFanMult() : 1); // subscribers see it on day one, fans most of all (less so if you've flooded their feed)
     v.rateCeiling = rand(15000, 90000) * (1 + strength);
     v.decayFactor = 0.978;
     v.pulseChance = 0.0006 + score / 150000;
@@ -1107,10 +1112,13 @@ function resolveCollab(v){
   if (rand(0, 100) < flopChance){
     gained = Math.round(c.subs * rand(0.0003, 0.001));
     c.flopped = true;
+    if (rival) adjustRel(rival, 5);
     pushNotification(ic('users') + ` The collab with ${c.name} didn't land — their audience wasn't feeling it. +${fmt(gained)} subscribers.`);
     if (!offlineFastForward) showToast(ic('users') + ` Collab with ${c.name} flopped — only +${fmt(gained)} subs`, true);
   } else {
-    gained = Math.round(c.subs * rand(0.004, 0.012) * (0.5 + v.algorithmScore / 100));
+    gained = Math.round(c.subs * rand(0.004, 0.012) * (0.5 + v.algorithmScore / 100) * (rival ? relCollabPullMult(rival) : 1)
+      * (typeof audienceAlsoWatches === 'function' && audienceAlsoWatches().some(r => r.name === c.name) ? 1.2 : 1)); // your viewers already watch them
+    if (rival) adjustRel(rival, 18, `Your collab with ${rival.name} worked for both of you.`);
     pushNotification(ic('users') + ` ${c.name}'s viewers followed you over — +${fmt(gained)} subscribers from the collab.`);
     if (!offlineFastForward){
       showToast(ic('users') + ` Collab hit! +${fmt(gained)} subscribers from ${c.name}'s audience`, true);
@@ -1179,7 +1187,7 @@ function subConversionRate(v){
   const ct = archOf(v);
   // Shorts viewers scroll on: lots of views, far fewer of them subscribe than on long-form.
   const formatMult = v.format === 'shorts' ? 0.13 : 1;
-  return clamp(0.0006 + retentionFactor * 0.045, 0, 0.06) * satisfactionMult * qualityMult * (ct ? ct.subs : 1) * identitySubsMult(v) * formatMult;
+  return clamp(0.0006 + retentionFactor * 0.045, 0, 0.06) * satisfactionMult * qualityMult * (ct ? ct.subs : 1) * identitySubsMult(v) * formatMult * (typeof demoSubMult === 'function' ? demoSubMult() : 1);
 }
 
 /* Fractional subscribers accumulate (a single tick's gain is usually well under 1 whole
@@ -1230,6 +1238,7 @@ function advanceVideo(v, ticks){
   v.playlistRet = v.playlistRet || 0;
   let subRate = subConversionRate(v);
   const isShort = v.format === 'shorts';
+  const ageRpm = typeof demoRpmMult === 'function' ? demoRpmMult() : 1;  // your audience's age and countries set what a view is worth
   for (let i = 0; i < ticks; i++){
     v.age++;
     let justPulsed = false;
@@ -1280,7 +1289,7 @@ function advanceVideo(v, ticks){
 
     if (state.isMonetized){
       // Long-form earns ad revenue; Shorts earn a smaller share from the Shorts feed pool.
-      const tickRevenue = isShort ? applied * 0.00042 : applied * 0.0018 * v.revenueMult;
+      const tickRevenue = (isShort ? applied * 0.00042 : applied * 0.0018 * v.revenueMult) * ageRpm;
       moneyGained += tickRevenue;
       v.revenueEarned = (v.revenueEarned || 0) + tickRevenue;
       if (isShort){ state.shortsRevenueTotal += tickRevenue; state.pendingShortsRevenue += tickRevenue; }
@@ -1483,7 +1492,7 @@ function applyInternetBill(){
 
 function applyInactivityPenalty(){
   if (state.uploadLog.length === 0) return; // no channel activity yet — nothing to erode
-  const silence = state.totalTicks - state.lastUploadTick;
+  const silence = state.totalTicks - (typeof lastUploadAt === 'function' ? lastUploadAt() : state.lastUploadTick);
   if (silence <= BREAK_GRACE_TICKS) { state.inBreakPenalty = false; return; }
   state.algoRating = clamp(state.algoRating - 1.2, 0, 100);
   if (!state.inBreakPenalty){
@@ -1520,7 +1529,7 @@ function regenEnergy(ticks){
   }
 }
 function buyCoffee(){
-  const day = Math.floor(state.totalTicks / DAY_TICKS);
+  const day = clockDay();
   if (state.coffeeDay !== day){ state.coffeeDay = day; state.coffeeCount = 0; }
   if (state.coffeeCount >= COFFEE_PER_DAY){
     playErrorSound();
@@ -1538,14 +1547,24 @@ function buyCoffee(){
 }
 
 function advanceGlobalTicks(n){
-  const prevTicks = state.totalTicks;
-  state.totalTicks += n;
+  // Step hour by hour, so every daily and hourly check sees the time it is actually about
+  // (a long absence replays in order, instead of judging every skipped day by the moment you return).
   regenEnergy(n);
+  const end = state.totalTicks + n;
+  while (state.totalTicks < end){
+    const prevTicks = state.totalTicks;
+    state.totalTicks = Math.min(end, (Math.floor(prevTicks / HOUR_TICKS) + 1) * HOUR_TICKS);
+    advanceGlobalStep(prevTicks);
+  }
+  if (typeof tickSocial === 'function') tickSocial();
+}
+function advanceGlobalStep(prevTicks){
 
   // Roll rank announcements + inactivity penalty once per in-game day actually crossed
   // (so a big offline jump applies the real cumulative effect, not just one flat tick).
-  const daysBefore = Math.floor(prevTicks / DAY_TICKS);
-  const daysAfter = Math.floor(state.totalTicks / DAY_TICKS);
+  // days roll over at midnight on the in-game clock
+  const daysBefore = clockDay(prevTicks);
+  const daysAfter = clockDay(state.totalTicks);
   for (let d = daysBefore; d < daysAfter; d++){
     announcePlayerRank();
     applyInactivityPenalty();
@@ -1593,6 +1612,11 @@ function advanceGlobalTicks(n){
     state.currentHourRevenue = 0;
     tickCreatorFeed();
     tickRivalry();
+    tickSponsors();
+    tickMoments();
+    if (typeof tickCalendar === 'function') tickCalendar();
+    if (typeof tickDemographics === 'function') tickDemographics();
+    if (typeof tickSituations === 'function') tickSituations();
   }
 
   // Internet bill — handles multiple missed cycles correctly if a big offline jump crosses several.
@@ -1849,26 +1873,28 @@ function maybeTriggerEvent(){
     }
     state.dayViews += bonus; state.currentHourViews += bonus;
     countEventSubs(applyFractionalSubs(Math.min(bonus * subConversionRate(v), 20 + state.subs * 0.04))); // capped: a spike brings viewers, not a whole new audience
-    state.algoRating = clamp(state.algoRating - 5, 0, 100);
-    showToast(ic('alert') + ` Controversy around "${v.title}" — views spiked, rating took a hit`, true);
+    // the controversy is now a Situation you get to handle; the old flat hit only if one can't open right now
+    const baity = v.thumb === 'shock' || v.titleStyle === 'curiosity';
+    const handled = typeof queueSituation === 'function' && (baity
+      ? queueSituation('clickbait', { videoId: v.id, topic: v.topic, title: v.title, justified: shownRetention(v) < 33 })
+      : queueSituation('hotTake', { videoId: v.id, topic: v.topic, title: v.title, opinion: v.ctArch === 'opinion' }));
+    if (!handled){
+      state.algoRating = clamp(state.algoRating - 3, 0, 100);
+      showToast(ic('alert') + ` Controversy around "${v.title}" — views spiked, rating took a hit`, true);
+    }
 
   } else if (roll < 0.78 && state.unlocks.sponsorships){
-    // brands pay more when your recent uploads include reviews or unboxings
-    const sponsorFriendly = (state.videos || []).slice(-5).some(x => x.ctArch && ARCHETYPES[x.ctArch] && ARCHETYPES[x.ctArch].sponsor);
+    // brands now send contract offers (Monetization → Sponsorships) instead of free money
     if (identitySponsorRefuses()){ showToast(ic('gift') + ' A brand passed on working with you after your recent controversies.'); return; }
-    const amount = rand(30, 160) * (sponsorFriendly ? 1.4 : 1) * identitySponsorMult();
-    state.money += amount;
-    state.lifetimeRevenue += amount;
-    state.sponsorshipRevenue += amount;
-    pushTransaction('sponsor', 'Sponsorship Payment', amount);
-    showToast(ic('gift') + ` Brand deal landed — +$${amount.toFixed(2)}`, true);
+    if (sponsorBook().deals.filter(d => d.status === 'offer' || d.status === 'active').length < 3){ const d = makeSponsorOffer(); if (d) announceOffer(d); }
 
   } else if (roll >= 0.9 && liveCount >= 3){
     // Rare. A shout-out brings a trickle to a tiny channel (15-35) and ~2-8% more to an established one.
     const subBonus = Math.floor(rand(15, 35) + state.subs * rand(0.02, 0.08));
     state.subs += subBonus;
     countEventSubs(subBonus);
-    showToast(ic('star') + ` A bigger creator shared your channel! +${fmt(subBonus)} subscribers`, true);
+    if (!(typeof queueSituation === 'function' && queueSituation('shoutout', { gain: subBonus })))
+      showToast(ic('star') + ` A bigger creator shared your channel! +${fmt(subBonus)} subscribers`, true);
   } else {
     return; // nothing happened this time
   }
@@ -2309,6 +2335,7 @@ function confirmDeleteVideo(){
   }
   state.videos = state.videos.filter(video => video.id !== pendingDeleteId);
   dropFromPlaylists(pendingDeleteId);
+  if (typeof socialVideoGone === 'function') socialVideoGone(pendingDeleteId);
   syncPlaylistBoosts();
   pendingDeleteId = null;
   document.getElementById('delete-confirm-modal').classList.remove('show');
@@ -2711,7 +2738,7 @@ function renderHome(){
   const moneyDelta = state.money - state.dailySnapshot.money;
   document.getElementById('today-views').textContent = '+' + fmt(viewsDelta);
   document.getElementById('today-subs').textContent = '+' + fmt(subsDelta);
-  document.getElementById('today-money').textContent = '+$' + moneyDelta.toFixed(2);
+  document.getElementById('today-money').textContent = (moneyDelta < 0 ? '−$' : '+$') + Math.abs(moneyDelta).toFixed(2);
 
   const moneyDeltaEl = document.getElementById('stat-money-delta');
   const subsDeltaEl = document.getElementById('stat-subs-delta');
@@ -2897,7 +2924,8 @@ function renderMonetizationDetail(el){
         <div class="panel-box"><h3>Shorts payouts</h3>${monTxList(['shorts'], state.isMonetized ? 'No Shorts payouts yet.' : 'Shorts pay out once your channel is in the Partner Programme.')}</div>
       </div>`;
   } else if (t === 'sponsor'){
-    if (!state.unlocks.sponsorships){ el.innerHTML = lockedPanel('Sponsorships', 'Brands start reaching out once you hit 1,000 subscribers. Deals arrive as random events and pay a lump sum.', state.subs, 1000); return; }
+    if (!state.unlocks.sponsorships){ el.innerHTML = lockedPanel('Sponsorships', 'Brands start sending contract offers once you hit 1,000 subscribers: promote a product in a video, hit the view target, get paid. Do well and they come back with bigger deals.', state.subs, 1000); return; }
+    renderSponsorDetail(el); return;
     const deals = state.transactions.filter(x => x.type === 'sponsor');
     el.innerHTML = `
       <div class="stats-4">
@@ -3084,7 +3112,7 @@ function renderVideoAnalytics(){
       <div class="va-thumb">${videoThumb(v)}<span class="lu-dur">${mmss(dur)}</span></div>
       <div class="va-head-main">
         <div class="va-title">${v.title}</div>
-        <div class="va-meta">${TOPICS[v.topic] ? TOPICS[v.topic].label : ''}${v.ctName ? ' ' + v.ctName : ''} &middot; ${v.format === 'shorts' ? 'Short' : 'Long-form'} &middot; published ${formatDuration(v.age)} ago</div>
+        <div class="va-meta">${TOPICS[v.topic] ? TOPICS[v.topic].label : ''}${v.ctName ? ' ' + v.ctName : ''} &middot; ${v.format === 'shorts' ? 'Short' : 'Long-form'} &middot; published ${formatDuration(v.age)} ago${typeof videoAgeMix === 'function' ? ' &middot; viewers mostly ' + AGE_GROUPS[topAgeIndex(videoAgeMix(v))] : ''}</div>
         <div class="va-status">${statusPill(v.status)}<span class="va-algo">${algo.text}</span></div>
       </div>
     </div>
@@ -3569,10 +3597,13 @@ function performUpload(o){
   playClickSound();
   const lastBefore = state.lastUploadTick;
   const v = createVideo(topicKey, thumbKey, lengthKey, effortKey, titleStyleKey, formatKey, { fatigue, abThumb, collab: o.collab, ctype: o.ctype });
+  if (o.sponsorDeal) attachSponsor(v, o.sponsorDeal);
   if (o.publishAt && o.publishAt > state.totalTicks){
     v.publishAt = o.publishAt; v.wasScheduled = true;
     state.lastUploadTick = lastBefore;           // it only counts once it actually goes live
   }
+  if (typeof claimFollowUp === 'function') claimFollowUp(v);   // a follow-up you promised in a Situation
+  if (typeof claimSocial === 'function') claimSocial(v);       // a waiting teaser or trend tie-in on Pulse
   spendEnergy(cost);
   gainXP(XP_UPLOAD[effortKey] || 40, 'upload');
   if (fatigue > 0){
@@ -3597,14 +3628,19 @@ function performUpload(o){
 /* ---------- Collabs with rival creators ---------- */
 function collabInfo(r){
   const needSubs = Math.ceil(r.subs * COLLAB_MIN_RATIO);
-  const cost = Math.max(40, Math.round(r.subs * COLLAB_COST_PER_SUB));
+  const cost = Math.round(Math.max(40, Math.round(r.subs * COLLAB_COST_PER_SUB)) * relCollabCostMult(r));
   const readyAt = state.collabCooldowns[r.name] || 0;
   const invited = (r.inviteUntil || 0) > state.totalTicks;   // they asked you: free, and size doesn't matter
+  // a collab booked on the Calendar: price locked in, and on the day nothing else stands in the way
+  const booking = typeof bookingFor === 'function' ? bookingFor(r.name) : null;
+  const bookedNow = !!(booking && booking.status === 'ready');
+  const price = bookedNow ? booking.cost : invited ? 0 : cost;
   return {
-    needSubs, cost: invited ? 0 : cost, invited,
-    tooSmall: !invited && state.subs < needSubs,
-    broke: !invited && state.money < cost,
-    resting: state.totalTicks < readyAt,
+    needSubs, cost: price, listCost: cost, invited, rel: relTier(r), booking, bookedNow,
+    tooSmall: !invited && !bookedNow && !relSizeWaived(r) && state.subs < needSubs,
+    broke: !invited && state.money < price,
+    resting: !bookedNow && state.totalTicks < readyAt,
+    readyAt,
     daysLeft: Math.max(1, Math.ceil((readyAt - state.totalTicks) / DAY_TICKS)),
   };
 }
@@ -3612,6 +3648,7 @@ function startCollab(name){
   const r = ensureRivals().find(x => x.name === name);
   if (!r) return;
   const c = collabInfo(r);
+  if (c.booking && !c.bookedNow){ playErrorSound(); showToast(ic('calendar') + ` You've booked ${r.name} for ${formatTick(c.booking.at)}. Film then.`); return; }
   if (c.tooSmall || c.broke || c.resting){ playErrorSound(); return; }
   if (state.uploadCooldownTicksLeft > 0){
     playErrorSound();
@@ -3628,7 +3665,9 @@ function startCollab(name){
   state.money -= c.cost;
   state.collabCount++;
   state.collabCooldowns[r.name] = state.totalTicks + COLLAB_RIVAL_COOLDOWN_TICKS;
-  r.inviteUntil = 0; // invitation used
+  if ((r.inviteUntil || 0) > state.totalTicks) adjustRel(r, 8, `You took ${r.name} up on their invite.`);
+  if (c.bookedNow){ c.booking.status = 'done'; adjustRel(r, 5, `You showed up for the collab you planned with ${r.name}.`); if (typeof linkCollabPromo === 'function') linkCollabPromo(v, r.name); }
+  r.inviteUntil = 0; r.inviteUsed = true; // invitation used
   pushTransaction('collab', `Collab with ${r.name}`, -c.cost);
   showToast(ic('users') + ` Filming with ${r.name}. It goes live once the upload finishes.`, true);
   safeRenderAll();
@@ -3640,7 +3679,13 @@ function renderCollabs(){
   el.innerHTML = rivals.map(r => {
     const c = collabInfo(r);
     let status, btn;
-    if (c.invited && !c.resting){
+    if (c.bookedNow){
+      status = `Collab day! Film before ${formatTick(c.booking.until).replace(/^Day \d+ · /, '')} · $${fmt(c.cost)}`;
+      btn = `<button class="collab-btn ready" data-collab="${r.name}" ${c.broke || state.uploadCooldownTicksLeft > 0 ? 'disabled' : ''}>Film</button>`;
+    } else if (c.booking){
+      status = `Booked for ${formatTick(c.booking.at)} · $${fmt(c.booking.cost)}`;
+      btn = `<button class="collab-btn" disabled>Booked</button>`;
+    } else if (c.invited && !c.resting){
       status = `Invited you! Free for ${Math.max(1, Math.ceil((r.inviteUntil - state.totalTicks) / 60))} more hours`;
       btn = `<button class="collab-btn ready" data-collab="${r.name}" ${state.uploadCooldownTicksLeft > 0 ? 'disabled' : ''}>Accept</button>`;
     } else if (c.tooSmall){
@@ -3668,7 +3713,7 @@ function renderCollabs(){
 
 /* ---------- Rewarded ads: daily cap + one entry point ---------- */
 function adsLeftToday(){
-  const day = Math.floor(state.totalTicks / DAY_TICKS);
+  const day = clockDay();
   if (state.adDay !== day){ state.adDay = day; state.adCount = 0; }
   return Math.max(0, ADS_PER_DAY - state.adCount);
 }
@@ -3745,7 +3790,7 @@ function renderStudioEnergy(){
   }
   const coffee = document.getElementById('coffee-btn');
   if (coffee){
-    const day = Math.floor(state.totalTicks / DAY_TICKS);
+    const day = clockDay();
     const used = state.coffeeDay === day ? state.coffeeCount : 0;
     coffee.innerHTML = `${ic('coffee')}Coffee break <span>$${COFFEE_COST}, +${COFFEE_ENERGY}</span><em>${COFFEE_PER_DAY - used} left today</em>`;
     coffee.disabled = used >= COFFEE_PER_DAY || state.energy >= ENERGY_MAX;
@@ -3793,13 +3838,15 @@ function renderCooldown(){
 
 /* ---------- Tabs ---------- */
 function switchTab(tab){
-  ['home', 'content', 'studio', 'analytics', 'monetization', 'shop', 'feed', 'settings'].forEach(t => {
+  ['home', 'content', 'studio', 'analytics', 'calendar', 'social', 'monetization', 'shop', 'feed', 'settings'].forEach(t => {
     document.getElementById('tab-' + t).classList.toggle('active', t === tab);
   });
   document.querySelectorAll('.nav-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.tab === tab);
   });
   if (tab === 'settings') renderSettings();
+  if (tab === 'calendar') renderCalendar(true);
+  if (tab === 'social') renderSocial(true);
 }
 /* ---------- Appearance: dark / light / system ---------- */
 function resolvedTheme(){
@@ -3926,6 +3973,22 @@ function sanitizeState(){
   if (Array.isArray(state.rivals)) state.rivals.forEach(r => { if (!Array.isArray(r.hist)) r.hist = []; if (r.topic && !TOPICS[r.topic]) r.topic = 'gaming'; });
   state.bestStreamPeak = num(state.bestStreamPeak, 0);
   state.superChatRevenue = num(state.superChatRevenue, 0);
+  // v0.9 systems: drop anything corrupted rather than let it break a tab
+  if (state.social && typeof state.social === 'object'){
+    const so = state.social;
+    so.followers = num(so.followers, 0);
+    if (!Array.isArray(so.posts)) so.posts = [];
+    so.posts = so.posts.filter(p => p && p.final && Number.isFinite(p.final.impressions) && POST_TYPES[p.type]);
+  } else state.social = undefined;
+  if (state.sit && typeof state.sit === 'object'){
+    if (!Array.isArray(state.sit.open)) state.sit.open = [];
+    state.sit.open = state.sit.open.filter(s => s && SITUATIONS[s.key] && s.ctx);
+    if (state.sit.followUp && (!SITUATIONS[state.sit.followUp.key] || !Number.isFinite(state.sit.followUp.until))) state.sit.followUp = null;
+  }
+  if (state.demo && (!Array.isArray(state.demo.age) || state.demo.age.length !== 4 || state.demo.age.some(x => !Number.isFinite(x)))) state.demo = null;
+  if (!Array.isArray(state.collabBookings)) state.collabBookings = [];
+  if (!Array.isArray(state.rivalPlans)) state.rivalPlans = [];
+  if (state.moodForecast && typeof state.moodForecast !== 'object') state.moodForecast = {};
   // One-time recount for saves made after per-video subscriber tracking existed: subscribers the
   // old flat "celebrity shout-out" event handed out (80-500 at a time) are trimmed to what the
   // channel actually earned plus a fair allowance for shout-outs under the new rules.
@@ -3945,6 +4008,9 @@ function sanitizeState(){
   }
   if (!CADENCES[state.cadence]) state.cadence = 'casual';
   if (!['dark', 'light', 'system'].includes(state.theme)) state.theme = 'dark';
+  sponsorBook();
+  (state.rivals || []).forEach(r => { r.rel = clamp(num(r.rel, r.peer ? -10 : 0), -100, 100); });
+  if (!Array.isArray(state.pendingMoments)) state.pendingMoments = [];
   state.cadStreak = num(state.cadStreak, 0); state.cadDayCount = num(state.cadDayCount, 0);
   if (typeof state.tutorialDone !== 'boolean'){
     // Existing players aren't forced through the tour; they get told it exists.
@@ -4087,7 +4153,7 @@ function sanitizeState(){
     if (typeof v.expanded !== 'boolean') v.expanded = false;
     // a scheduled video saved mid-pipeline goes back to waiting for its slot (publishDueVideos runs on start)
     if (v.wasScheduled && !v.logged && typeof v.publishAt === 'number' && v.publishPhase !== 'live') v.publishPhase = 'scheduled';
-    if (v.publishPhase && v.publishPhase !== 'live' && v.publishPhase !== 'scheduled') v.publishPhase = 'live';
+    if (v.publishPhase && v.publishPhase !== 'live' && v.publishPhase !== 'scheduled'){ v.publishPhase = 'live'; v.needsLiveHooks = true; }   // saved mid-upload
     if (v.publishPhase === 'scheduled' && typeof v.publishAt !== 'number') v.publishPhase = 'live';
     if (v.publishPhase === 'live' && !v.wasScheduled) v.logged = true;
     if (v.publishPhase === 'live' && v.wasScheduled && !v.logged){ state.uploadLog.push(v.publishAt || state.totalTicks); v.logged = true; }
@@ -4279,8 +4345,10 @@ function startGame(hadSave){
       formatKey: document.getElementById('format-select').value,
       abThumb: state.unlocks.customThumbnails && abSel ? abSel.value : '',
       ctype: currentCtype(document.getElementById('topic-select').value),
+      sponsorDeal: (document.getElementById('sponsor-select') || {}).value || '',
       publishAt: chosenPublishAt(),
     });
+    if (typeof calendarAfterUpload === 'function') calendarAfterUpload();
   });
 
   /* Rewarded ad: skip the upload cooldown. The reward only lands in onReward. */
@@ -4311,6 +4379,9 @@ function startGame(hadSave){
     else {
       state.videos = state.videos.filter(x => x.id !== id);
       state.storageUsedGB = Math.max(0, state.storageUsedGB - (v.sizeGB || 0));
+      dropFromPlaylists(id);
+      if (typeof socialVideoGone === 'function') socialVideoGone(id);
+      if (typeof sponsorBook === 'function') sponsorBook().deals.forEach(d => { if (d.videoId === id && d.status === 'active') d.videoId = null; });   // the deal waits for another video
       playClickSound(); showToast(ic('calendar') + ` Cancelled "${v.title}".`);
     }
     safeRenderAll();
@@ -4461,8 +4532,13 @@ function startGame(hadSave){
   initLiveUI();
   initCtypeUI();
   initCadenceUI();
+  initSocialUI();
+  initCalendarUI();
+  initSituationsUI();
+  initSocialMediaUI();
   applyTheme();
   publishDueVideos();
+  state.videos.forEach(v => { if (v.needsLiveHooks){ delete v.needsLiveHooks; if (typeof videoLiveHooks === 'function') videoLiveHooks(v); } });
   refreshIdentity(false);
   const idClose = document.getElementById('identity-close');
   if (idClose) idClose.addEventListener('click', () => { playClickSound(); document.getElementById('identity-modal').classList.remove('show'); });
@@ -4478,7 +4554,7 @@ function refreshVideoModal(){
   if (m && m.classList.contains('show') && vaVideoId) renderVideoAnalytics();
 }
 function safeRenderAll(){
-  const renders = [renderIdentity, renderEquipment, renderStats, renderVideos, renderHome, renderRecentVideos, renderChannelProgress, renderAnalyticsOverview, renderStatusDonut, renderMonetization, renderCooldown, renderCreatorFeed, renderDiscoverFeed, renderWhoToFollow, renderNicheStatus, renderPartnerProgramme, renderSoundToggle, renderMusicToggle, renderGameClock, renderCollabs, renderStudioEnergy, renderCadencePanel, renderStudioCadence, renderPublishSelect, refreshVideoModal, renderIdentityCard, renderRivalWatch];
+  const renders = [renderIdentity, renderEquipment, renderStats, renderVideos, renderHome, renderRecentVideos, renderChannelProgress, renderAnalyticsOverview, renderStatusDonut, renderMonetization, renderCooldown, renderCreatorFeed, renderDiscoverFeed, renderWhoToFollow, renderNicheStatus, renderPartnerProgramme, renderSoundToggle, renderMusicToggle, renderGameClock, renderCollabs, renderStudioEnergy, renderCadencePanel, renderStudioCadence, renderPublishSelect, renderSponsorSelect, refreshVideoModal, renderIdentityCard, renderRivalWatch, renderCalendar, renderComingUp, renderDemographics, renderSituations, renderSocial];
   renders.forEach(fn => {
     try { fn(); } catch(e){ console.error('Render error in', fn.name, e); }
   });

@@ -122,8 +122,8 @@ function findType(topic, id){ const list = typesFor(topic); return list.find(t =
 function archOf(v){ return v && v.ctArch ? ARCHETYPES[v.ctArch] : null; }
 
 /* One archetype is in fashion each in-game day (like topics). Seeded by day so it's stable. */
-function trendingArch(){
-  const day = Math.floor(state.totalTicks / DAY_TICKS);
+function trendingArch(dayArg){
+  const day = typeof dayArg === 'number' ? dayArg : clockDay();
   const keys = ['challenge', 'reaction', 'review', 'guide', 'news', 'list', 'opinion', 'casual', 'comparison', 'unboxing'];
   let h = (day + 7) * 2654435761 >>> 0;
   return keys[h % keys.length];
@@ -202,13 +202,17 @@ function contentTypeAftermath(v){
     const bump = Math.round(v.baseRate * rand(8, 16));
     v.views += bump;
     v.commentCount = (v.commentCount || 0) + bump * 0.02;
-    state.algoRating = clamp(state.algoRating - 2, 0, 100);
-    showToast(ic('chat') + ` "${v.title}" started a heated debate in the comments. More views, but some people are annoyed.`, true);
+    if (!(typeof queueSituation === 'function' && queueSituation('hotTake', { videoId: v.id, topic: v.topic, title: v.title, opinion: true }))){
+      state.algoRating = clamp(state.algoRating - 2, 0, 100);
+      showToast(ic('chat') + ` "${v.title}" started a heated debate in the comments. More views, but some people are annoyed.`, true);
+    }
   }
   if (A.backlash && Math.random() < A.backlash){
     v.satisfaction = clamp(v.satisfaction - 6, 5, 99);
-    state.algoRating = clamp(state.algoRating - 2, 0, 100);
-    showToast(ic('chat') + ` Some viewers called "${v.title}" lazy. Reactions work best when you add something.`, true);
+    if (!(typeof queueSituation === 'function' && queueSituation('reactionTheft', { videoId: v.id, topic: v.topic, title: v.title, justified: v.effort === 'quick' || v.satisfaction < 50 }))){
+      state.algoRating = clamp(state.algoRating - 2, 0, 100);
+      showToast(ic('chat') + ` Some viewers called "${v.title}" lazy. Reactions work best when you add something.`, true);
+    }
   }
 }
 
@@ -242,6 +246,7 @@ function renderCtypeChips(){
       const g = id => (document.getElementById(id) || {}).value;
       const pseudo = { topic, format: g('format-select'), effort: g('effort-select'), ctArch: cur.arch, ctRepeats: reps + 1 };
       identityEffects(pseudo).notes.forEach(n => notes.push(`<span class="${n.good ? 'ct-good' : 'ct-warn'}">${n.text}</span>`));
+      if (typeof videoAgeMix === 'function') notes.push(`<span>Draws mostly ${AGE_GROUPS[topAgeIndex(videoAgeMix(pseudo))]}</span>`);
     }
     hint.innerHTML = `<b>${cur.name}:</b> ${A.pro}, but ${A.con}.${notes.length ? `<div class="ct-notes">${notes.join('')}</div>` : ''}`;
   }

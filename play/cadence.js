@@ -24,7 +24,11 @@ const STREAK_CAP = 10;
 
 function cadence(){ return CADENCES[state.cadence] || CADENCES.casual; }
 /* Published uploads inside the last N in-game days (scheduled ones count when they go live). */
-function uploadsInLastDays(days){ return (state.uploadLog || []).filter(t => state.totalTicks - t < days * DAY_TICKS).length; }
+function uploadsInLastDays(days){ return (state.uploadLog || []).filter(t => t <= state.totalTicks && state.totalTicks - t < days * DAY_TICKS).length; }
+/* The most recent upload that has actually gone live by now (replaying time away can hold later ones). */
+function lastUploadAt(){ return (state.uploadLog || []).reduce((m, t) => t <= state.totalTicks && t > m ? t : m, 0); }
+/* Streak length in days (a casual check covers 2 days). */
+function streakDays(){ return (state.cadStreak || 0) * cadence().windowDays; }
 
 /* Runs once per in-game day crossed (from advanceGlobalTicks). */
 function checkCadence(){
@@ -38,12 +42,12 @@ function checkCadence(){
     const boost = C.gain * (1 + Math.min(state.cadStreak, STREAK_CAP) * 0.1);
     state.algoRating = clamp(state.algoRating + boost, 0, 100);
     if (state.cadStreak === 3 || state.cadStreak === 7 || state.cadStreak % 10 === 0){
-      pushNotification(ic('fire') + ` ${state.cadStreak}-day ${C.label.toLowerCase()} streak. Streamly knows your rhythm now: your uploads get pushed harder.`);
-      if (!offlineFastForward) showToast(ic('fire') + ` ${state.cadStreak}-day upload streak!`, true);
+      pushNotification(ic('fire') + ` ${streakDays()}-day ${C.label.toLowerCase()} streak. Streamly knows your rhythm now: your uploads get pushed harder.`);
+      if (!offlineFastForward) showToast(ic('fire') + ` ${streakDays()}-day upload streak!`, true);
     }
   } else {
     if ((state.cadStreak || 0) >= 2){
-      pushNotification(ic('alert') + ` You missed your ${C.label.toLowerCase()} upload plan (${made} of ${C.need}). Your ${state.cadStreak}-day streak is over.`);
+      pushNotification(ic('alert') + ` You missed your ${C.label.toLowerCase()} upload plan (${made} of ${C.need}). Your ${streakDays()}-day streak is over.`);
       if (!offlineFastForward) showToast(ic('alert') + ` Streak broken: ${made} of ${C.need} uploads.`, true);
     }
     state.cadStreak = 0;
@@ -53,14 +57,14 @@ function checkCadence(){
 /* Long breaks: after the plan's grace period, the audience drifts away a little every day. */
 function audienceDecay(){
   if (!(state.uploadLog || []).length) return;
-  const silentDays = (state.totalTicks - (state.lastUploadTick || 0)) / DAY_TICKS;
+  const silentDays = (state.totalTicks - lastUploadAt()) / DAY_TICKS;
   if (silentDays <= cadence().graceDays) return;
-  const lost = Math.floor(state.subs * 0.004);
+  const lost = Math.floor(state.subs * 0.004 * (typeof demoDecayMult === 'function' ? demoDecayMult() : 1));  // casual audiences drift fastest
   if (lost > 0){
     state.subs -= lost; state.daySubs -= lost;
     Object.keys(state.audienceLoyalty || {}).forEach(t => { state.audienceLoyalty[t] = clamp(state.audienceLoyalty[t] - 2, 0, 100); });
-    if (!state.decayNoticeDay || state.decayNoticeDay !== Math.floor(state.totalTicks / DAY_TICKS)){
-      state.decayNoticeDay = Math.floor(state.totalTicks / DAY_TICKS);
+    if (!state.decayNoticeDay || state.decayNoticeDay !== clockDay()){
+      state.decayNoticeDay = clockDay();
       pushNotification(ic('users') + ` ${Math.floor(silentDays)} days without an upload: ${fmt(lost)} subscribers drifted away today.`);
     }
   }
@@ -86,20 +90,23 @@ function nextClockTick(hour, extraDays){
   return now + delta + (extraDays || 0) * DAY_TICKS;
 }
 function publishSlots(){
-  const tonight = nextClockTick(19, 0);
-  const tmrMorning = nextClockTick(9, clockMinute(state.totalTicks) < 9 * 60 - 30 ? 1 : 0);
+  const P = typeof primeHour === 'function' ? primeHour() : 19;   // your audience's prime time
+  const tonight = nextClockTick(P, 0);
+  const tmrMorning = nextClockTick(9, 0);
   return [
     { id: 'now',      label: 'Publish now' },
     { id: 'in2h',     label: 'In 2 hours',             at: state.totalTicks + 120 },
-    { id: 'tonight',  label: 'Next 7:00 PM (prime time)', at: tonight },
+    { id: 'tonight',  label: 'Next prime time',        at: tonight },
     { id: 'morning',  label: 'Next 9:00 AM',            at: tmrMorning },
-    { id: 'tomorrow', label: 'Tomorrow 7:00 PM',        at: tonight + DAY_TICKS },
-  ];
+    { id: 'tomorrow', label: 'Prime time, a day later', at: tonight + DAY_TICKS },
+  ].concat(typeof calendarPublishAt === 'number' && calendarPublishAt > state.totalTicks + 5
+    ? [{ id: 'cal', label: 'From your Calendar: Day ' + (clockDay(calendarPublishAt) + 1), at: calendarPublishAt }] : []);
 }
 function scheduledVideos(){ return state.videos.filter(v => v.publishPhase === 'scheduled'); }
 
 /* Day-one audience by the hour a video goes live. */
 function timeOfDayMult(hour){
+  if (typeof audienceTimeMult === 'function') return audienceTimeMult(hour);   // when YOUR audience is online (Analytics → Audience)
   if (hour >= 18 && hour <= 22) return 1.2;   // prime time
   if (hour >= 12) return 1.08;
   if (hour >= 7) return 1.0;
@@ -113,10 +120,17 @@ function goLive(v, atTick){
   v.publishHour = Math.floor(clockMinute(t) / 60);
   if (!v.logged){ state.uploadLog.push(t); v.logged = true; }
   state.lastUploadTick = Math.max(state.lastUploadTick || 0, t);
+  videoLiveHooks(v);
   if (v.wasScheduled){
     pushNotification(ic('play') + ` Your scheduled video "${v.title}" is now live.`);
     if (!offlineFastForward) showToast(ic('play') + ` Scheduled video is live: "${v.title}"`, true);
   }
+}
+/* Everything that happens the moment a video goes live. */
+function videoLiveHooks(v){
+  if (typeof rebaseScheduledVideo === 'function') rebaseScheduledVideo(v);   // a scheduled video meets the day it actually lands on
+  if (typeof applyFollowUp === 'function') applyFollowUp(v);                 // a follow-up promised in a Situation
+  if (typeof onVideoLiveSocial === 'function') onVideoLiveSocial(v);         // Pulse teasers and trend tie-ins
 }
 /* Every tick: publish anything that's due. */
 function publishDueVideos(){
@@ -127,12 +141,18 @@ function publishDueVideos(){
 function renderPublishSelect(){
   const sel = document.getElementById('publish-select');
   if (!sel || document.activeElement === sel) return;
-  const cur = sel.value || 'now';
-  sel.innerHTML = publishSlots().map(s => `<option value="${s.id}" ${s.id === cur ? 'selected' : ''}>${s.label}${s.at ? ' · ' + formatTick(s.at).replace(/^Day \d+ · /, '') : ''}</option>`).join('');
+  let cur = sel.value || 'now';
+  const slots = publishSlots();
+  if (cur === 'cal' && !slots.some(s => s.id === 'cal')){
+    cur = 'now';
+    if (typeof calendarPublishAt === 'number'){ calendarPublishAt = null; showToast(ic('calendar') + ' Your Calendar time has passed, so Publish is back to "now".'); }
+  }
+  const dayWord = at => { const d = clockDay(at) - clockDay(); return d <= 0 ? '' : d === 1 ? 'Tomorrow ' : `Day ${clockDay(at) + 1} `; };
+  sel.innerHTML = slots.map(s => `<option value="${s.id}" ${s.id === cur ? 'selected' : ''}>${s.label}${s.at ? ' · ' + (s.id === 'cal' ? '' : dayWord(s.at)) + formatTick(s.at).replace(/^Day \d+ · /, '') : ''}</option>`).join('');
   const hint = document.getElementById('publish-hint');
   if (hint){
     const q = scheduledVideos().length;
-    hint.textContent = q >= MAX_SCHEDULED ? `You have ${q} videos scheduled, the maximum.` : `Prime time (6 to 10 PM) gets the best first day. ${q ? q + ' scheduled.' : ''}`;
+    hint.textContent = q >= MAX_SCHEDULED ? `You have ${q} videos scheduled, the maximum.` : `Your viewers' prime time (${typeof primeLabel === 'function' ? primeLabel(primeHour()) : '7 PM – 10 PM'}) gets the best first day.${q ? ' ' + q + ' scheduled: tease them on Social for release-day viewers.' : ''}`;
   }
 }
 function chosenPublishAt(){
@@ -148,14 +168,14 @@ function renderCadencePanel(){
   const C = cadence();
   const made = uploadsInLastDays(C.windowDays);
   const streak = state.cadStreak || 0;
-  const silent = (state.uploadLog || []).length ? (state.totalTicks - (state.lastUploadTick || 0)) / DAY_TICKS : 0;
+  const silent = (state.uploadLog || []).length ? (state.totalTicks - lastUploadAt()) / DAY_TICKS : 0;
   const pct = Math.round(clamp(state.algoRating, 0, 100));
   el.innerHTML = `
     <div class="cad-chips">${Object.entries(CADENCES).map(([k, c]) => `<button class="cad-chip ${state.cadence === k ? 'on' : ''}" data-cad="${k}">${c.label}</button>`).join('')}</div>
     <div class="cad-blurb">${C.blurb}</div>
     <div class="cad-stats">
       <div><span>${C.windowDays === 2 ? 'Last 2 days' : 'Last 24 hours'}</span><b>${made} / ${C.need}</b></div>
-      <div><span>Streak</span><b>${streak} ${streak === 1 ? 'day' : 'days'}</b></div>
+      <div><span>Streak</span><b>${streakDays()} ${streakDays() === 1 ? 'day' : 'days'}</b></div>
       <div><span>Familiarity bonus</span><b>+${cadenceAlgoBonus().toFixed(1)}</b></div>
     </div>
     <div class="cad-fam"><div class="cad-fam-head"><span>Algorithm familiarity</span><b>${pct}%</b></div>
@@ -168,7 +188,7 @@ function renderStudioCadence(){
   if (!el) return;
   const C = cadence();
   const made = uploadsInLastDays(C.windowDays);
-  el.innerHTML = `<b>${C.label} plan</b> · ${made} of ${C.need} ${C.windowDays === 2 ? 'in 2 days' : 'today'} · streak ${state.cadStreak || 0}`;
+  el.innerHTML = `<b>${C.label} plan</b> · ${made} of ${C.need} ${C.windowDays === 2 ? 'in 2 days' : 'today'} · streak ${streakDays()} ${streakDays() === 1 ? 'day' : 'days'}`;
 }
 function initCadenceUI(){
   const p = document.getElementById('cadence-panel');

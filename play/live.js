@@ -10,7 +10,7 @@
    only after the game has started, so game.js globals are available.
    ========================================================================= */
 /* Feature flag: live streaming is built but held back for a later update. Flip to true to release. */
-const LIVE_ENABLED = false;
+const LIVE_ENABLED = true;
 const LIVE_MIN_SUBS = 50;
 const LIVE_LENGTHS = {
   s30:  { label: '30 min', minutes: 30,  energy: 22 },
@@ -47,6 +47,7 @@ let liveSetup = { topic: 'gaming', len: 's60' };
 
 function liveTimeOfDayMult(){
   const hour = Math.floor(((state.totalTicks + CLOCK_START_OFFSET_MIN) % DAY_TICKS) / 60);
+  if (typeof audienceLiveMult === 'function') return audienceLiveMult(hour);   // when your audience is online
   if (hour >= 18 && hour <= 23) return 1.3;   // prime time
   if (hour >= 12) return 1.0;
   if (hour >= 7) return 0.8;
@@ -57,7 +58,7 @@ function liveAudiencePotential(topic){
   const mood = ensureAudienceMood();
   const moodMult = 1 + (mood.moods[topic] || 0) / 100;
   const loyalty = typeof state.audienceLoyalty[topic] === 'number' ? state.audienceLoyalty[topic] : 50;
-  const notified = state.subs * rand(0.025, 0.045) * (0.6 + loyalty / 125);
+  const notified = state.subs * rand(0.025, 0.045) * (0.6 + loyalty / 125) * (typeof demoFanMult === 'function' ? demoFanMult() : 1);
   const browsing = 3 + Math.sqrt(state.subs) * 0.6;
   return (notified + browsing) * moodMult * liveTimeOfDayMult() * (0.8 + state.algoRating / 250);
 }
@@ -211,7 +212,9 @@ function endLiveStream(early){
   v.sizeGB = 0;
   v.publishPhase = 'live';
   v.vodStats = { peak: L.peak, avg: Math.round(avg), minutes: L.elapsed, superChatNet: L.superChatNet, subs: L.subs, members: L.members };
+  v.logged = true;
   state.videos.push(v);
+  state.uploadLog.push(state.totalTicks); state.lastUploadTick = state.totalTicks; // counts for your upload plan
   state.dayViews += unique; state.currentHourViews += unique; state.totalViews += unique;
   gainXP(Math.min(300, Math.floor(L.peak / 5)), 'live');
   state.bestStreamPeak = Math.max(state.bestStreamPeak || 0, L.peak);
@@ -299,7 +302,7 @@ function buildLiveSetup(el){
           <div><span>Energy cost</span><b>${L.energy}</b></div>
           <div><span>Real time</span><b>${L.minutes >= 60 ? L.minutes / 60 + ' min' : '30 sec'}</b></div>
         </div>
-        <div class="live-hint">More viewers come in the evening, on trending topics, and from loyal audiences. ${state.fanFunding ? 'Super Chats and new members are on.' : 'Super Chats and members unlock with Partner Programme tier 1.'}</div>
+        <div class="live-hint">More viewers come during your audience's prime time (${typeof primeLabel === 'function' ? primeLabel(primeHour()) : 'evenings'}), on trending topics, and from loyal fans. ${state.fanFunding ? 'Super Chats and new members are on.' : 'Super Chats and members unlock with Partner Programme tier 1.'}</div>
         <div class="live-gate" id="live-gate">${g.ok ? '' : g.why}</div>
         <button class="upload-btn" id="go-live-btn" ${g.ok ? '' : 'disabled'}><span class="live-dot-red"></span>Go live</button>
       </div>

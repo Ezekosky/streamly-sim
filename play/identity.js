@@ -74,6 +74,9 @@ function identityStrength(){ if (window.__noIdentity) return 0; const s = state.
 function identityEffects(v){
   const id = state.identity, k = identityStrength();
   const fx = { algo: 0, ctr: 0, sat: 0, cap: 1, notes: [] };
+  // rivals piling onto a topic (trend chasers, premieres on the calendar) crowd it out for everyone
+  const crowd = (state.topicCrowd || {})[v.topic] || 0;
+  if (crowd > 0.05){ fx.algo -= Math.min(10, crowd * 10); fx.notes.push({ good: false, text: `Crowded: rivals just piled onto ${TOPICS[v.topic].label} (-${Math.round(Math.min(10, crowd * 10))})` }); }
   if (!id || k === 0) return fx;
   if (id.main === 'specialist'){
     if (v.topic === id.topic){ fx.algo += 7 * k; fx.notes.push({ good: true, text: `In your niche (+${Math.round(7 * k)})` }); }
@@ -97,9 +100,6 @@ function identityEffects(v){
     fx.algo += 4 * k + (v.ctRepeats > 1 ? 2 * (v.ctRepeats - 1) * k : 0); // they expect it, so repeats hurt less
     fx.notes.push({ good: true, text: `Your audience knows you for ${TRAIT_WORDS[id.trait]}` });
   }
-  // rivals piling onto a topic crowd it out
-  const crowd = (state.topicCrowd || {})[v.topic] || 0;
-  if (crowd > 0.05){ fx.algo -= Math.min(10, crowd * 10); fx.notes.push({ good: false, text: `Crowded: rivals just piled onto ${TOPICS[v.topic].label} (-${Math.round(Math.min(10, crowd * 10))})` }); }
   return fx;
 }
 function applyIdentityPre(v){
@@ -252,9 +252,11 @@ function tickRivalry(){
   });
 
   // daily bookkeeping
-  const newDay = state.totalTicks % DAY_TICKS < 60;
+  const newDay = clockMinute(state.totalTicks) < 60;
   if (newDay) rivals.forEach(r => { r.hist = (r.hist || []).concat([Math.round(r.subs)]).slice(-8); if (r.status && Math.random() < 0.5) r.status = null; });
 
+  // ignored collab invites cost goodwill
+  rivals.forEach(r => { if (r.inviteUntil && r.inviteUntil < state.totalTicks && !r.inviteUsed){ r.inviteUntil = 0; if (!(typeof bookingFor === 'function' && bookingFor(r.name))) adjustRel(r, -6); } });
   // resolve rival "response" videos that are due
   (state.pendingResponses || []).slice().forEach(p => {
     if (state.totalTicks < p.at) return;
@@ -266,9 +268,11 @@ function tickRivalry(){
     pushFeedItem({ name: r.name, text: `just uploaded a new video — "${p.title}"`, vid: rivalVideoStats(r) });
     if (Math.random() < odds){
       v.rate *= 1.15; state.algoRating = clamp(state.algoRating + 1, 0, 100);
+      adjustRel(r, -6, `${r.name}'s answer to your video lost.`);
       compEvent(r, `made their own version of "${v.title}". Yours is winning.`, { toast: true, cooldown: 30 });
     } else {
       v.rate *= 0.85; if (Number.isFinite(v.authorityCap)) v.authorityCap *= 0.9;
+      adjustRel(r, -3);
       compEvent(r, `made their own version of "${v.title}", and theirs is getting more views.`, { toast: true, notify: true, cooldown: 30 });
     }
   });
@@ -285,8 +289,8 @@ function tickRivalry(){
     if (ahead !== r.aheadKnown && state.subs >= 20 && state.totalTicks >= (r.crossCd || 0)){
       r.aheadKnown = ahead;
       r.crossCd = state.totalTicks + 360;
-      if (ahead) compEvent(r, `just overtook you with ${fmt(r.subs)} subscribers.`, { toast: true, notify: true, cooldown: 20 });
-      else { compEvent(null, `overtook ${r.name}! You're now ahead with ${fmt(state.subs)} subscribers.`, { toast: true, cooldown: 20 }); playSuccessSound(); }
+      if (ahead){ adjustRel(r, -3); compEvent(r, `just overtook you with ${fmt(r.subs)} subscribers.`, { toast: true, notify: true, cooldown: 20 }); }
+      else { adjustRel(r, -5); compEvent(null, `overtook ${r.name}! You're now ahead with ${fmt(state.subs)} subscribers.`, { toast: true, cooldown: 20 }); playSuccessSound(); }
     }
   });
 
@@ -312,19 +316,26 @@ function tickRivalry(){
     if (top && top.gain > Math.max(10, yours * 1.5) && (top.r.domUntil || 0) < state.totalTicks){
       top.r.domUntil = state.totalTicks + 3 * DAY_TICKS; top.r.status = 'Dominating';
       state.topicCrowd[niche] = (state.topicCrowd[niche] || 0) + 0.2;
+      adjustRel(top.r, -4);
       compEvent(top.r, `has started dominating the ${TOPICS[niche].label} category.`, { toast: true, notify: true, cooldown: 120 });
     }
   } else if (roll < 0.095 && state.subs >= 100 && niche){
-    // shout-out
-    const r = rivals.filter(x => x.topic === niche)[0] || rivals[Math.floor(Math.random() * rivals.length)];
-    const gain = Math.round(Math.min(r.subs * 0.0004, state.subs * 0.02 + 8));
+    // shout-out: friends (and anyone you shouted out first) are the ones who mention you
+    const friendly = rivals.filter(x => relOf(x) >= 20 || x.owesYou).sort((a, b) => relOf(b) - relOf(a));
+    const r = friendly[0] || rivals.filter(x => x.topic === niche && relOf(x) > -20)[0] || rivals.filter(x => relOf(x) > -20)[Math.floor(Math.random() * Math.max(1, rivals.length))];
+    if (!r) return;
+    r.owesYou = false;
+    const gain = Math.round(Math.min(r.subs * 0.0004, state.subs * 0.02 + 8) * (1 + Math.max(0, relOf(r)) / 100));
     if (gain >= 1){ state.subs += gain; state.daySubs += gain; state.currentHourSubs += gain; }
-    compEvent(r, `mentioned you in their latest video. +${fmt(gain)} subscribers.`, { toast: true });
+    adjustRel(r, 6);
+    compEvent(r, `mentioned you in their latest video. +${fmt(gain)} subscribers.`, { toast: false });
+    if (!(typeof queueSituation === 'function' && queueSituation('shoutout', { rival: r.name, subs: r.subs, gain })))
+      showMoment({ tag: 'Creator shoutout', tone: 'good', face: r.name, title: `A creator with ${fmtCompact(r.subs)} subscribers mentioned your channel.`, lines: [`${r.name} told their audience to check you out. +${fmt(gain)} subscribers so far.`], actions: [{ label: 'Open Feed', tab: 'feed' }] });
   } else if (roll < 0.105 && state.subs >= 200 && niche){
-    // collab invite: free for a day, size requirement waived
-    const bigger = rivals.filter(x => x.topic === niche && x.subs > state.subs && !(x.inviteUntil > state.totalTicks));
-    const r = bigger[Math.floor(Math.random() * bigger.length)];
-    if (r){ r.inviteUntil = state.totalTicks + DAY_TICKS; compEvent(r, `wants to collab with you. It's free if you accept within a day (Feed → Collabs).`, { toast: true, notify: true, cooldown: 90 }); }
+    // collab invite: free for a day, size requirement waived; friends invite more, rivals never do
+    const bigger = rivals.filter(x => (x.topic === niche || relOf(x) >= 20) && x.subs > state.subs * 0.5 && relOf(x) > -20 && !(x.inviteUntil > state.totalTicks) && !(typeof bookingFor === 'function' && bookingFor(x.name))).sort((a, b) => relOf(b) - relOf(a));
+    const r = bigger[0] && Math.random() < 0.6 ? bigger[0] : bigger[Math.floor(Math.random() * bigger.length)];
+    if (r){ r.inviteUntil = state.totalTicks + DAY_TICKS; r.inviteUsed = false; compEvent(r, `wants to collab with you. It's free if you accept within a day (Feed → Collabs).`, { toast: true, notify: true, cooldown: 90 }); }
   } else if (roll < 0.12){
     // breakout
     const r = rivals[Math.floor(Math.random() * rivals.length)];
@@ -358,9 +369,9 @@ function onPlayerUpload(v){
   if (v.collab || !state.peersSpawned) return;
   const same = ensureRivals().filter(r => r.topic === v.topic);
   if (!same.length) return;
-  const chance = state.identity && state.identity.topic === v.topic ? 0.2 : 0.1;
+  const r = same.slice().sort((a, b) => relResponseMult(b) - relResponseMult(a))[0] || same[Math.floor(Math.random() * same.length)];
+  const chance = (state.identity && state.identity.topic === v.topic ? 0.2 : 0.1) * relResponseMult(r);
   if (Math.random() >= chance) return;
-  const r = same.find(x => x.peer) || same[Math.floor(Math.random() * same.length)];
   const typed = TYPE_TITLES[v.topic] && v.ctype && TYPE_TITLES[v.topic][v.ctype];
   const pool = typed || TITLE_BANK[v.topic];
   let title = pool[Math.floor(Math.random() * pool.length)];
@@ -390,6 +401,12 @@ function renderRivalWatch(){
         <div class="dc-creator-subs">${TOPICS[r.topic].label} &middot; ${rivalSubsLabel(r.subs)} subs &middot; ${fresh ? (r.peer ? `new, started ${feedTimeAgo(r.joinedTick || state.totalTicks)}` : 'weekly change shows tomorrow') : `<span class="${change >= 0 ? 'rw-up' : 'rw-down'}">${change >= 0 ? '+' : ''}${change.toFixed(1)}% this week</span>`}</div>
       </div>
       <span class="rw-pos ${ahead ? 'ahead' : 'behind'}">${ahead ? 'Ahead of you' : 'Behind you'}</span>
+    </div>
+    <div class="rw-rel">
+      <span class="rel-tag ${relTier(r).tone}">${relTier(r).label}</span>
+      <div class="rel-bar"><span class="rel-zero"></span><span class="rel-fill ${relOf(r) >= 0 ? 'pos' : 'neg'}" style="${relOf(r) >= 0 ? `left:50%;width:${relOf(r) / 2}%` : `right:50%;width:${-relOf(r) / 2}%`}"></span></div>
+      <button class="mini-btn" data-shout="${r.name}" ${(r.shoutCd || 0) > state.totalTicks ? 'disabled' : ''}>Shout out</button>
+      <button class="mini-btn danger" data-callout="${r.name}" ${(r.callCd || 0) > state.totalTicks ? 'disabled' : ''}>Call out</button>
     </div>`;
   }).join('');
 }
