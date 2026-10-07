@@ -1,0 +1,19 @@
+{
+  "name": "streamly-sim-app",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Android app build for Streamly Sim. The game itself lives in ../play.",
+  "dependencies": {
+    "@capacitor-community/admob": "8.2.1",
+    "@capacitor/android": "8.5.2",
+    "@capacitor/app": "8.1.2",
+    "@capacitor/core": "8.5.2"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "3.0.5",
+    "@capacitor/cli": "8.5.2",
+    "@fontsource/inter": "5.3.0",
+    "sharp": "0.35.5"
+  }
+}
