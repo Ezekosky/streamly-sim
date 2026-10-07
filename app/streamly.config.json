@@ -1,0 +1,12 @@
+{
+  "appId": "com.aetheredge.streamlysim",
+  "appName": "Streamly Sim",
+  "versionName": "0.9.2",
+  "backgroundColor": "#0a0a0a",
+  "privacyPolicyUrl": "https://streamly-sim.vercel.app/privacy/",
+  "admob": {
+    "testAds": true,
+    "appId": "ca-app-pub-3940256099942544~3347511713",
+    "rewardedAdId": "ca-app-pub-3940256099942544/5224354917"
+  }
+}
