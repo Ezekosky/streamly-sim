@@ -42,12 +42,6 @@
     { tab: 'analytics', target: '#cadence-panel',
       title: 'Your upload plan',
       body: 'Pick Casual, Consistent or Aggressive. Keep to it and you build a streak: Streamly learns your rhythm and pushes your videos harder. Miss it and the streak resets. Pick the plan that matches how often you really upload. In the Studio you can also schedule videos to go live later, even while you are away.' },
-    { tab: 'calendar', target: '#cal-week',
-      title: 'Plan your week',
-      body: "The Calendar shows the next 7 days: your scheduled uploads, sponsor deadlines, bills, rival premieres, booked collabs, and a forecast of which topics will be hot. Pick a day to schedule an upload or book a collab for it. Tap the clock in the top bar to open it any time." },
-    { tab: 'analytics', target: '#spp-status',
-      title: 'Getting paid',
-      body: 'You earn nothing from views until you join the Partner Programme. Tier 1 (500 subs) unlocks memberships. Tier 2 (1,000 subs) unlocks ad money. Track your progress here.' },
     { tab: 'analytics', target: '#identity-card',
       title: 'Your channel identity',
       body: 'After 15 uploads your audience starts to see you as something: a Gaming channel known for guides, a Variety Creator, a Shorts channel. Every identity has perks and a cost, and it keeps shifting with what you make.' },
@@ -57,6 +51,12 @@
     { tab: 'analytics', target: '#an-range-btn',
       title: 'Change the time range',
       body: 'Switch between the last 48 hours, 7, 28 or 90 days, or lifetime.' },
+    { tab: 'calendar', target: '#cal-week',
+      title: 'Plan your week',
+      body: "The Calendar shows the next 7 days: your scheduled uploads, sponsor deadlines, bills, rival premieres, booked collabs, and a forecast of which topics will be hot. Pick a day to schedule an upload or book a collab for it. Tap the clock in the top bar to open it any time." },
+    { tab: 'monetization', target: '#spp-panel',
+      title: 'Getting paid',
+      body: 'You earn nothing from views until you join the Partner Programme. Tier 1 (500 subs) unlocks memberships. Tier 2 (1,000 subs) unlocks ad money. Track your progress here.' },
     { tab: 'shop', target: '#equip-list',
       title: 'Better gear, better videos',
       body: 'Camera, mic and editing upgrades raise quality. Faster internet uploads quicker, and more storage means more videos. Watch your data cap on mobile internet.' },
@@ -118,6 +118,7 @@
     const s = S[idx];
     try { if (typeof playClickSound === 'function') playClickSound(); } catch(e){}
     if (s.tab && typeof switchTab === 'function') switchTab(s.tab);
+    if (s.tab === 'monetization'){ const ov = document.querySelector('[data-msub="overview"]'); if (ov && !ov.classList.contains('active')) ov.click(); }
     const el = s.target ? document.querySelector(s.target) : null;
     if (el) el.scrollIntoView({ block: 'center', behavior: 'instant' });
     overlay.querySelector('.tut-step').textContent = `${idx + 1} of ${S.length}`;

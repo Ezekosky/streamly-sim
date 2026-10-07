@@ -50,6 +50,10 @@
   }
 
   /* ---------------- scenes ---------------- */
+  /* Each scene marks its subject with FG ... EG. Covers with a face keep the subject on the
+     left (the face takes the right); "clean" covers have no face, so the subject is slid to
+     the middle of the frame. `cx` is the subject's horizontal centre. */
+  const FG = '\u0001', EG = '\u0002';
   const SCENES = {
     gaming(r, G){
       const sets = [
@@ -74,15 +78,15 @@
       [60, 64, 70, 79].forEach(y => s += `<line x1="0" y1="${y}" x2="${W}" y2="${y}" stroke="${S.neon}" stroke-width=".6" opacity=".4"/>`);
       // controller, lit from above
       const cx = 48, cy = 48;
-      s += `<ellipse cx="${cx}" cy="${cy + 20}" rx="30" ry="5" fill="#000" opacity=".35"/>`;
+      s += FG + `<ellipse cx="${cx}" cy="${cy + 20}" rx="30" ry="5" fill="#000" opacity=".35"/>`;
       s += `<g transform="rotate(${f(-10 + r() * 8)} ${cx} ${cy})">
         <rect x="${cx - 28}" y="${cy - 13}" width="56" height="26" rx="13" fill="${G.lin([['#33334a'], ['#14141f']])}" stroke="${S.neon}" stroke-width="1.4"/>
         <rect x="${cx - 24}" y="${cy - 10}" width="48" height="8" rx="4" fill="#fff" opacity=".12"/>
         <rect x="${cx - 19}" y="${cy - 1.5}" width="11" height="3.4" rx="1.4" fill="#e9e9f2"/><rect x="${cx - 15.2}" y="${cy - 5.4}" width="3.4" height="11" rx="1.4" fill="#e9e9f2"/>
         <circle cx="${cx + 12}" cy="${cy - 4}" r="2.8" fill="${S.pop}"/><circle cx="${cx + 19}" cy="${cy + 1}" r="2.8" fill="${S.neon}"/>
         <circle cx="${cx + 6}" cy="${cy + 3}" r="2.8" fill="#ffd23f"/><circle cx="${cx + 12.5}" cy="${cy + 8}" r="2.8" fill="#fff" opacity=".85"/>
-      </g>`;
-      return { s, accent: S.pop, glow: S.neon, focus: [cx, cy], dark: true };
+      </g>` + EG;
+      return { s, accent: S.pop, glow: S.neon, focus: [cx, cy], cx, dark: true };
     },
 
     tech(r, G){
@@ -93,8 +97,8 @@
       ];
       const S = pick(r, sets);
       let s = `<rect width="${W}" height="${H}" fill="${G.lin([[S.bg[0]], [S.bg[1]]])}"/>`;
-      s += `<circle cx="52" cy="44" r="46" fill="${G.rad([[S.glow, .38], [S.glow, 0]], .5, .5, .5)}"/>`;
       s += `<rect y="70" width="${W}" height="20" fill="${S.light ? '#b9c5cd' : '#000'}" opacity="${S.light ? .8 : .45}"/>`;
+      s += FG + `<circle cx="52" cy="44" r="46" fill="${G.rad([[S.glow, .38], [S.glow, 0]], .5, .5, .5)}"/>`;
       s += `<ellipse cx="52" cy="72" rx="34" ry="5" fill="#000" opacity=".3"/>`;
       if (r() < .5){
         s += `<g transform="rotate(-7 52 44)">
@@ -111,8 +115,8 @@
           <path d="M26 50 36 39 45 46 57 31 78 48" stroke="#08131c" stroke-width="2.4" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
           <path d="M8 62h88l-7 9H15z" fill="${G.lin([['#9aa3ad'], ['#5d656e']])}"/>`;
       }
-      s += `<path d="M96 14l2.4 6.6 6.6 2.4-6.6 2.4L96 32l-2.4-6.6L87 23l6.6-2.4z" fill="${S.pop}" opacity=".95"/>`;
-      return { s, accent: S.pop, glow: S.glow, focus: [52, 42], dark: !S.light };
+      s += `<path d="M96 14l2.4 6.6 6.6 2.4-6.6 2.4L96 32l-2.4-6.6L87 23l6.6-2.4z" fill="${S.pop}" opacity=".95"/>` + EG;
+      return { s, accent: S.pop, glow: S.glow, focus: [52, 42], cx: 54, dark: !S.light };
     },
 
     lifestyle(r, G){
@@ -124,25 +128,25 @@
       const S = pick(r, sets);
       let s = `<rect width="${W}" height="${H}" fill="${S.wall}"/>`;
       // window with morning light
-      s += `<rect x="10" y="6" width="66" height="58" rx="3" fill="${G.lin([[S.sky[0]], [S.sky[1]]])}"/>
+      s += FG + `<rect x="10" y="6" width="66" height="58" rx="3" fill="${G.lin([[S.sky[0]], [S.sky[1]]])}"/>
         <circle cx="42" cy="38" r="14" fill="${S.sun}"/>
         <path d="M10 64 L76 64 L76 46 L10 58z" fill="#fff" opacity=".25"/>
         <rect x="10" y="6" width="66" height="58" rx="3" fill="none" stroke="#fff" stroke-width="4"/>
         <line x1="43" y1="6" x2="43" y2="64" stroke="#fff" stroke-width="3"/><line x1="10" y1="35" x2="76" y2="35" stroke="#fff" stroke-width="3"/>`;
       // light spill on the wall
-      s += `<path d="M76 20 L160 4 L160 90 L76 64z" fill="${S.sun}" opacity=".18"/>`;
+      s += `<path d="M76 20 L200 -3 L200 90 L76 64z" fill="${S.sun}" opacity=".18"/>` + EG;
       // desk
       s += `<rect y="66" width="${W}" height="24" fill="${G.lin([['#8a5e44'], ['#5d3c2a']])}"/><rect y="66" width="${W}" height="2" fill="#fff" opacity=".25"/>`;
       // plant
-      s += `<path d="M20 66h16l-2.4-15H22.4z" fill="#e2dbcf"/><path d="M20 66h16l-.6-4H20.6z" fill="#000" opacity=".12"/>`;
+      s += FG + `<path d="M20 66h16l-2.4-15H22.4z" fill="#e2dbcf"/><path d="M20 66h16l-.6-4H20.6z" fill="#000" opacity=".12"/>`;
       for (let i = 0; i < 6; i++){
         const a = -70 + i * 28;
         s += `<ellipse cx="28" cy="40" rx="4" ry="12" fill="${S.leaf}" transform="rotate(${a} 28 51)" opacity="${f(.75 + r() * .25)}"/>`;
       }
       // mug with steam
       s += `<rect x="52" y="54" width="12" height="12" rx="2.5" fill="#fff"/><path d="M64 57a3.4 3.4 0 0 1 0 6.6" stroke="#fff" stroke-width="2" fill="none"/>
-        <path d="M55 51q2.4-3.4 0-6.6M60 51q2.4-3.4 0-6.6" stroke="#fff" stroke-width="1.2" fill="none" opacity=".85" stroke-linecap="round"/>`;
-      return { s, accent: S.leaf, glow: S.sun, focus: [42, 38], dark: false };
+        <path d="M55 51q2.4-3.4 0-6.6M60 51q2.4-3.4 0-6.6" stroke="#fff" stroke-width="1.2" fill="none" opacity=".85" stroke-linecap="round"/>` + EG;
+      return { s, accent: S.leaf, glow: S.sun, focus: [42, 38], cx: 43, dark: false };
     },
 
     comedy(r, G){
@@ -160,11 +164,11 @@
       }
       s += `<rect width="${W}" height="${H}" fill="${G.rad([['#fff', .18], ['#000', .22]], .4, .4, .75)}"/>`;
       // speech bubble
-      s += `<g transform="translate(10 40)"><path d="M0 9a9 9 0 0 1 9-9h33a9 9 0 0 1 9 9v13a9 9 0 0 1-9 9H20l-9 8 1.4-8H9a9 9 0 0 1-9-9z" fill="#fff" stroke="#14141a" stroke-width="1.8"/>
+      s += FG + `<g transform="translate(10 40)"><path d="M0 9a9 9 0 0 1 9-9h33a9 9 0 0 1 9 9v13a9 9 0 0 1-9 9H20l-9 8 1.4-8H9a9 9 0 0 1-9-9z" fill="#fff" stroke="#14141a" stroke-width="1.8"/>
         <text x="25.5" y="21.5" text-anchor="middle" font-family="Inter, Arial Black, sans-serif" font-weight="800" font-size="11" fill="${S.pop}">${pick(r, ['?!', 'LOL', 'NO WAY', 'BRUH'])}</text></g>`;
       // banana peel prop
-      s += `<g transform="translate(16 74) rotate(-6)"><path d="M0 0q16 11 34-4-3 12-19 12Q4 8 0 0z" fill="#ffe14d" stroke="#8a6d00" stroke-width="1.2"/><path d="M2 1q14 9 30-3" stroke="#fff" stroke-width="1.4" opacity=".6" fill="none"/></g>`;
-      return { s, accent: S.pop, glow: '#fff', focus: [34, 60], dark: false };
+      s += `<g transform="translate(16 74) rotate(-6)"><path d="M0 0q16 11 34-4-3 12-19 12Q4 8 0 0z" fill="#ffe14d" stroke="#8a6d00" stroke-width="1.2"/><path d="M2 1q14 9 30-3" stroke="#fff" stroke-width="1.4" opacity=".6" fill="none"/></g>` + EG;
+      return { s, accent: S.pop, glow: '#fff', focus: [34, 60], cx: 36, dark: false };
     },
 
     football(r, G){
@@ -174,19 +178,19 @@
       for (let i = 0; i < 9; i += 2) s += `<rect x="${i * 18}" width="18" height="${H}" fill="#fff" opacity=".05"/>`;
       s += `<rect width="${W}" height="${H}" fill="${G.rad([['#fff', .16], ['#000', .3]], .4, .35, .8)}"/>`;
       // goal
-      s += `<rect x="16" y="14" width="72" height="38" fill="#000" opacity=".14"/>`;
+      s += FG + `<rect x="16" y="14" width="72" height="38" fill="#000" opacity=".14"/>`;
       for (let i = 0; i <= 12; i++) s += `<line x1="${f(16 + i * 6)}" y1="14" x2="${f(16 + i * 6)}" y2="52" stroke="#fff" stroke-width=".45" opacity=".55"/>`;
       for (let i = 0; i <= 6; i++) s += `<line x1="16" y1="${f(14 + i * 6.3)}" x2="88" y2="${f(14 + i * 6.3)}" stroke="#fff" stroke-width=".45" opacity=".55"/>`;
-      s += `<path d="M14 52V12h76v40" stroke="#fff" stroke-width="3" fill="none" stroke-linejoin="round"/>`;
+      s += `<path d="M14 52V12h76v40" stroke="#fff" stroke-width="3" fill="none" stroke-linejoin="round"/>` + EG;
       s += `<path d="M0 64h${W}" stroke="#fff" stroke-width="1.4" opacity=".7"/><path d="M28 64a24 11 0 0 0 46 0" stroke="#fff" stroke-width="1.4" fill="none" opacity=".7"/>`;
       // ball mid-flight with motion trail
       const bx = 40 + r() * 16, by = 30 + r() * 8;
-      s += `<path d="M${f(bx - 26)} ${f(by + 34)}q14-16 ${f(20)}-28" stroke="#fff" stroke-width="1.8" stroke-dasharray="2 3.4" fill="none" opacity=".75"/>
+      s += FG + `<path d="M${f(bx - 26)} ${f(by + 34)}q14-16 ${f(20)}-28" stroke="#fff" stroke-width="1.8" stroke-dasharray="2 3.4" fill="none" opacity=".75"/>
         <ellipse cx="${f(bx)}" cy="${f(by + 30)}" rx="8" ry="2.4" fill="#000" opacity=".25"/>
         <circle cx="${f(bx)}" cy="${f(by)}" r="9" fill="${G.lin([['#ffffff'], ['#cfd6db']])}" stroke="#12181c" stroke-width="1"/>
         <polygon points="${f(bx)},${f(by - 3.6)} ${f(bx + 3.4)},${f(by - 1.1)} ${f(bx + 2.1)},${f(by + 2.9)} ${f(bx - 2.1)},${f(by + 2.9)} ${f(bx - 3.4)},${f(by - 1.1)}" fill="#12181c"/>
-        <path d="M${f(bx - 8.6)} ${f(by - 2)}l4 1.4M${f(bx + 8.6)} ${f(by - 2)}l-4 1.4M${f(bx)} ${f(by + 8.8)}v-3.4" stroke="#12181c" stroke-width="1"/>`;
-      return { s, accent: '#ffd23f', glow: '#fff', focus: [bx, by], dark: true };
+        <path d="M${f(bx - 8.6)} ${f(by - 2)}l4 1.4M${f(bx + 8.6)} ${f(by - 2)}l-4 1.4M${f(bx)} ${f(by + 8.8)}v-3.4" stroke="#12181c" stroke-width="1"/>` + EG;
+      return { s, accent: '#ffd23f', glow: '#fff', focus: [bx, by], cx: 52, dark: true };
     },
 
     cooking(r, G){
@@ -200,6 +204,7 @@
       for (let y = 0; y < 58; y += 13) for (let x = (y / 13) % 2 ? 6.5 : 0; x < W; x += 13) s += `<rect x="${x}" y="${y}" width="12" height="12" rx="1.5" fill="#fff" opacity=".25"/>`;
       s += `<rect y="58" width="${W}" height="32" fill="${G.lin([[S.counter], ['#000']])}" opacity=".95"/><rect y="58" width="${W}" height="1.6" fill="#fff" opacity=".3"/>`;
       // hob flames
+      s += FG;
       [28, 41, 54].forEach(x => s += `<path d="M${x} 70q-4.4-7.4 0-13 1.2 5.4 4.4 6.4 2.2-4.4 0-8.6 6.6 5.4 2.2 15.2z" fill="${G.lin([['#ffd23f'], ['#ff6a1f']])}"/>`);
       // pan
       s += `<ellipse cx="44" cy="58" rx="33" ry="5" fill="#000" opacity=".28"/>
@@ -212,8 +217,8 @@
       } else {
         s += `<circle cx="33" cy="50.6" r="3.6" fill="#e0392c"/><circle cx="43" cy="49.6" r="3.2" fill="#3f8f3a"/><circle cx="53" cy="51.4" r="3.6" fill="#e8a33a"/><circle cx="39" cy="53.4" r="2.8" fill="#7a3e20"/>`;
       }
-      s += `<path d="M34 42q-4.4-6.6 0-13.2 4.4-6.6 0-13.2M46 42q-4.4-6.6 0-13.2 4.4-6.6 0-13.2" stroke="#fff" stroke-width="2.2" fill="none" opacity=".65" stroke-linecap="round"/>`;
-      return { s, accent: S.counter, glow: '#ffd23f', focus: [44, 50], dark: false };
+      s += `<path d="M34 42q-4.4-6.6 0-13.2 4.4-6.6 0-13.2M46 42q-4.4-6.6 0-13.2 4.4-6.6 0-13.2" stroke="#fff" stroke-width="2.2" fill="none" opacity=".65" stroke-linecap="round"/>` + EG;
+      return { s, accent: S.counter, glow: '#ffd23f', focus: [44, 50], cx: 52, dark: false };
     },
   };
 
@@ -344,7 +349,8 @@
     const r = rng(key);
     const G = gradients('t' + hashStr(key).toString(36));
     const scene = SCENES[topic](r, G);
-    let body = scene.s;
+    const dx = style === 'clean' && !o.guestFace && scene.cx != null ? Math.round(80 - scene.cx) : 0;
+    let body = scene.s.replace(/\u0001([\s\S]*?)\u0002/g, (m, fg) => dx ? `<g transform="translate(${dx} 0)">${fg}</g>` : fg);
 
     // subject spotlight so the face reads against the scene
     if (style !== 'clean'){

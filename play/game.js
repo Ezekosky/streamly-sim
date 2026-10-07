@@ -46,11 +46,11 @@ const ICON_PATHS = {
   camera: '<path d="M4 8h3l2-2h6l2 2h3a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1z"/><circle cx="12" cy="14" r="3.5"/>',
   megaphone: '<path d="M3 10v4a1 1 0 001 1h2l5 4V5L6 9H4a1 1 0 00-1 1z"/><path d="M15 8a4 4 0 010 8"/>',
   chart: '<path d="M4 20V12M9.5 20V6M15 20v-8M20 20V4"/>',
-  controller: '<rect x="2" y="8" width="20" height="9" rx="4.5"/><path d="M8 11v4M6 13h4"/><circle cx="16" cy="11.5" r="1" fill="currentColor" stroke="none"/><circle cx="18.5" cy="14" r="1" fill="currentColor" stroke="none"/>',
+  controller: '<path d="M7.2 7h9.6a5.2 5.2 0 0 1 5.2 5.2v1.4a3.4 3.4 0 0 1-6 2.2L14.6 14H9.4L8 15.8a3.4 3.4 0 0 1-6-2.2v-1.4A5.2 5.2 0 0 1 7.2 7z"/><path d="M7.5 9.6v3.6M5.7 11.4h3.6"/><circle cx="15.6" cy="10.4" r="1" fill="currentColor" stroke="none"/><circle cx="17.8" cy="12.6" r="1" fill="currentColor" stroke="none"/>',
   ball: '<circle cx="12" cy="12" r="9"/><path d="M12 8l2.5 1.8-1 3h-3l-1-3z"/><path d="M12 3.5v4.5M5 9l3 1M19 9l-3 1M8 20l1-4M16 20l-1-4"/>',
   chip: '<rect x="7" y="7" width="10" height="10" rx="1.5"/><path d="M9 3v4M15 3v4M9 17v4M15 17v4M3 9h4M3 15h4M17 9h4M17 15h4"/>',
-  leaf: '<path d="M5 21c8 0 14-6 14-14V4h-3C8 4 3 9 3 17v4z"/><path d="M5 21c4-6 8-10 14-14"/>',
-  utensils: '<path d="M6 2v7a2 2 0 002 2v11M6 2v6M9 2v6M4 2v6"/><path d="M17 2c-1.8 0-3 2.8-3 6s1.2 5 3 5v9"/>',
+  leaf: '<g transform="translate(1 -.5)"><path d="M5 21c8 0 14-6 14-14V4h-3C8 4 3 9 3 17v4z"/><path d="M5 21c4-6 8-10 14-14"/></g>',
+  utensils: '<g transform="translate(1.5 0)"><path d="M6 2v7a2 2 0 002 2v11M6 2v6M9 2v6M4 2v6"/><path d="M17 2c-1.8 0-3 2.8-3 6s1.2 5 3 5v9"/></g>',
   bolt: '<path d="M13 2L4.5 13.5H11L10 22l8.5-11.5H12z"/>',
   shorts: '<rect x="6.5" y="2.5" width="11" height="19" rx="3"/><path d="M10.5 9.5v5l4-2.5z"/>',
   list: '<path d="M8 6h13M8 12h13M8 18h13"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/>',
@@ -1904,21 +1904,44 @@ function maybeTriggerEvent(){
   renderHome();
 }
 
+/* ---------- Count-up for headline numbers (skipped for reduced motion / hidden elements) ---------- */
+const REDUCE_MOTION = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+function tweenNum(el, value, fmtFn){
+  if (!el) return;
+  const from = el._tv;
+  if (from == null || from === value || REDUCE_MOTION || document.hidden || el.offsetParent === null || !isFinite(from)){
+    if (el._tvRaf){ cancelAnimationFrame(el._tvRaf); el._tvRaf = 0; }
+    el._tv = value;
+    const t = fmtFn(value);
+    if (el.textContent !== t) el.textContent = t;
+    return;
+  }
+  if (el._tvRaf) cancelAnimationFrame(el._tvRaf);
+  const start = performance.now(), dur = 650;
+  const step = now => {
+    const k = Math.min(1, (now - start) / dur), e = 1 - Math.pow(1 - k, 3);
+    const cur = k < 1 ? from + (value - from) * e : value;
+    el._tv = cur;
+    el.textContent = fmtFn(cur);
+    el._tvRaf = k < 1 ? requestAnimationFrame(step) : 0;
+  };
+  el._tvRaf = requestAnimationFrame(step);
+}
+const fmtInt = v => fmt(v);
+const fmtCash = v => '$' + v.toFixed(2);
+
 /* ---------- Rendering: stat strip + topbar ---------- */
 function renderStats(){
   checkLevelUp();
   checkMilestones();
   checkAchievements();
   checkMonetization();
-  document.getElementById('stat-money').textContent = '$' + state.money.toFixed(2);
-  document.getElementById('stat-subs').textContent = fmt(state.subs);
-  document.getElementById('stat-views').textContent = fmt(state.totalViews);
-  const watchtimeEl = document.getElementById('stat-watchtime');
-  if (watchtimeEl) watchtimeEl.textContent = fmt(state.watchHours * 60) + ' min';
-  const topbarMoneyEl = document.getElementById('topbar-money');
-  if (topbarMoneyEl) topbarMoneyEl.textContent = '$' + state.money.toFixed(2);
-  const topbarSubsEl = document.getElementById('topbar-subs');
-  if (topbarSubsEl) topbarSubsEl.textContent = fmt(state.subs);
+  tweenNum(document.getElementById('stat-money'), state.money, fmtCash);
+  tweenNum(document.getElementById('stat-subs'), state.subs, fmtInt);
+  tweenNum(document.getElementById('stat-views'), state.totalViews, fmtInt);
+  tweenNum(document.getElementById('stat-watchtime'), state.watchHours * 60, v => fmtInt(v) + ' min');
+  tweenNum(document.getElementById('topbar-money'), state.money, fmtCash);
+  tweenNum(document.getElementById('topbar-subs'), state.subs, fmtInt);
   const info = getLevelInfo(state.xp || 0);
   const lvEl = document.getElementById('creator-level');
   if (lvEl) lvEl.textContent = `Lv. ${state.level}`;
@@ -2163,12 +2186,14 @@ function renderVideos(){
     const label = (UPLOAD_PHASE_LABEL[v.publishPhase] || (() => 'Uploading...'))(v);
     const stage = pipelineStageLabel(v.publishPhase);
     return `
-      <div class="video-card uploading-card">
+      <div class="video-card uploading-card uc-row phase-${v.publishPhase}">
         <div class="uc-thumb">${videoThumb(v)}</div>
-        <div class="video-title">${v.title}</div>
-        ${stage ? `<div class="pipeline-stage">${stage}</div>` : ''}
-        <div class="upload-progress-label">${label}</div>
-        ${v.publishPhase === 'uploading' ? `<div class="upload-progress-track"><div class="fill" style="width:${v.publishProgress}%"></div></div>` : ''}
+        <div class="uc-main">
+          ${stage ? `<div class="pipeline-stage">${stage}</div>` : ''}
+          <div class="video-title">${v.title}</div>
+          <div class="upload-progress-label">${label}</div>
+          ${v.publishPhase === 'uploading' ? `<div class="upload-progress-track"><div class="fill" style="width:${v.publishProgress}%"></div></div>` : ''}
+        </div>
         ${v.publishPhase === 'scheduled' ? `<div class="sched-actions"><button class="mini-btn" data-sched-now="${v.id}">Publish now</button><button class="mini-btn danger" data-sched-cancel="${v.id}">Cancel</button></div>` : ''}
         ${v.publishPhase === 'revealing' ? `
           <div class="live-counter">
@@ -2586,6 +2611,11 @@ function renderHome(){
     const hour24 = Math.floor((totalMin % DAY_TICKS) / 60);
     greetEl.textContent = hour24 < 12 ? 'morning' : hour24 < 18 ? 'afternoon' : 'evening';
   }
+  const greetName = document.getElementById('greet-name');
+  if (greetName){
+    const nm = (state.channelName || 'Creator').trim() || 'Creator';
+    if (greetName.textContent !== nm) greetName.textContent = nm;
+  }
 
   // Views by in-game day for the selected range (today included, still filling)
   const sparkEl = document.getElementById('views-sparkline');
@@ -2642,29 +2672,32 @@ function renderHome(){
     }
   }
 
-  // Channel Performance mini-stats — real today deltas, percentage relative to the running total
-  const prevViews = Math.max(1, state.dailySnapshot.views);
-  const prevSubs = Math.max(1, state.dailySnapshot.subs);
-  const prevMoney = Math.max(1, state.dailySnapshot.money);
-  const vDelta = state.totalViews - state.dailySnapshot.views;
-  const sDelta = state.subs - state.dailySnapshot.subs;
-  const mDelta = state.money - state.dailySnapshot.money;
+  // Channel Performance mini-stats — this range vs the same-length range before it
+  const prevHist = state.dailyHistory.slice(-(2 * days - 1), -(days - 1) || undefined);
   const perfViewsEl = document.getElementById('perf-views');
   const perfSubsEl = document.getElementById('perf-subs');
   const perfRevenueEl = document.getElementById('perf-revenue');
   if (perfViewsEl) perfViewsEl.textContent = fmtCompact(total48h);
   if (perfSubsEl) perfSubsEl.textContent = '+' + fmt(rangeSubs);
   if (perfRevenueEl) perfRevenueEl.textContent = '$' + rangeMoney.toFixed(2);
-  const pct = (n, d) => d > 0 ? Math.round((n / d) * 1000) / 10 : 0;
-  const setDelta = (id, val) => {
+  const setDelta = (id, cur, field) => {
     const el = document.getElementById(id);
     if (!el) return;
-    el.textContent = (val >= 0 ? '↑ ' : '↓ ') + Math.abs(val) + '%';
+    const prev = prevHist.reduce((a, d) => a + (d[field] || 0), 0);
+    // Not enough history for a fair comparison yet (a new channel, or nothing last period)
+    if (prevHist.length < Math.min(days, 2) || prev <= 0){
+      el.textContent = cur > 0 ? 'New this period' : '';
+      el.className = 'd flat';
+      return;
+    }
+    const val = Math.round(((cur - prev) / prev) * 100);
+    el.textContent = Math.abs(val) >= 1000 ? (val > 0 ? '↑ 10x+' : '↓ 90%+') : (val >= 0 ? '↑ ' : '↓ ') + Math.abs(val) + '%';
     el.className = 'd ' + (val >= 0 ? 'up' : 'down');
+    el.title = 'Compared with the ' + days + ' days before';
   };
-  setDelta('perf-views-d', pct(vDelta, prevViews));
-  setDelta('perf-subs-d', pct(sDelta, prevSubs));
-  setDelta('perf-revenue-d', pct(mDelta, prevMoney));
+  setDelta('perf-views-d', total48h, 'views');
+  setDelta('perf-subs-d', rangeSubs, 'subs');
+  setDelta('perf-revenue-d', rangeMoney, 'money');
 
   // Trending Topics — ranked by today's real audience mood + base popularity, no fabricated counts
   renderTrendingTopicsList('trending-topics-list');
@@ -2847,7 +2880,8 @@ function renderHome(){
     if (state.notifications.length === 0){
       notifEl.innerHTML = `<div class="empty-hint">Nothing yet — upload your first video to get things moving.</div>`;
     } else {
-      notifEl.innerHTML = state.notifications.slice(0, 8).map(n => `<div class="notif-line">${n.text}</div>`).join('');
+      const html = state.notifications.slice(0, 8).map(n => `<div class="notif-line"><span class="nl-text">${n.text}</span>${n.tick != null ? `<span class="notif-time">${feedTimeAgo(n.tick)}</span>` : ''}</div>`).join('');
+      if (notifEl._html !== html){ notifEl.innerHTML = html; notifEl._html = html; }
     }
   }
 }
@@ -2966,15 +3000,16 @@ function renderMonetization(){
   if (grid && detail){
     const overview = monetizationSubTab === 'overview';
     grid.style.display = overview ? '' : 'none';
+    const sppPanel = document.getElementById('spp-panel');
+    if (sppPanel) sppPanel.style.display = overview ? '' : 'none';
     detail.style.display = overview ? 'none' : '';
     if (!overview){ renderMonetizationDetail(detail); return; }
   }
 
   bigEl.textContent = '$' + state.lifetimeRevenue.toFixed(2);
-  const mDelta = state.money - state.dailySnapshot.money;
-  const pct = state.dailySnapshot.money > 0 ? Math.round((mDelta / state.dailySnapshot.money) * 1000) / 10 : 0;
+  const todayRev = Math.max(0, state.dayMoney || 0);
   const deltaEl = document.getElementById('mon-revenue-delta');
-  if (deltaEl) deltaEl.innerHTML = mDelta > 0 ? `${ic('arrowUp')} +$${mDelta.toFixed(2)} (${pct}%)` : '';
+  if (deltaEl) deltaEl.innerHTML = todayRev > 0.005 ? `${ic('arrowUp')} +$${todayRev.toFixed(2)} today` : '';
 
   // Revenue-over-time chart — real hourlyRevenue ledger
   const bars = state.hourlyRevenue.concat([state.currentHourRevenue]);
@@ -3008,27 +3043,6 @@ function renderMonetization(){
       tipEl.textContent = '$' + lastVal.toFixed(2);
       tipEl.style.display = 'block';
     }
-  }
-
-  // Monetization Progress — real unlock gates already tracked elsewhere in the sim
-  const progEl = document.getElementById('mon-progress-rows');
-  if (progEl){
-    const rows = [
-      { label: 'Memberships (tier 1)', unlocked: !!state.fanFunding, current: state.subs, target: FAN_SUBS_REQUIRED },
-      { label: 'Ad Revenue (tier 2)', unlocked: state.isMonetized, current: state.subs, target: SPP_SUBS_REQUIRED },
-      { label: 'Shorts Feed (tier 2)', unlocked: state.isMonetized, current: state.subs, target: SPP_SUBS_REQUIRED },
-      { label: 'Sponsorships', unlocked: !!state.unlocks.sponsorships, current: state.subs, target: 1000 },
-
-    ];
-    progEl.innerHTML = rows.map(r => `
-      <div class="mon-progress-row">
-        <div class="mon-progress-left">
-          <span class="mon-progress-ic ${r.unlocked ? 'done' : ''}">${r.unlocked ? ic('check') : ic('bell')}</span>
-          <span class="mon-progress-label">${r.label}</span>
-        </div>
-        <span class="mon-progress-status ${r.unlocked ? 'unlocked' : ''}">${r.unlocked ? 'Unlocked' : `${fmt(r.current)} / ${fmt(r.target)}`}</span>
-      </div>
-    `).join('');
   }
 
   // Revenue Sources — real cumulative totals per stream
@@ -3294,49 +3308,63 @@ function renderStatusDonut(){
   `;
 }
 
-/* ---------- Rendering: Streamly Partner Programme status (Analytics tab) ---------- */
+/* ---------- Rendering: Streamly Partner Programme (Monetization tab) ---------- */
+let _sppHtml = '';
 function renderPartnerProgramme(){
   const el = document.getElementById('spp-status');
   if (!el) return;
-  const subsPct = Math.min(100, Math.round((state.subs / SPP_SUBS_REQUIRED) * 100));
-  const hoursPct = Math.min(100, Math.round((state.lfWatchHours / SPP_WATCH_HOURS_REQUIRED) * 100));
   const sv = shortsViews90();
-  const shortsPct = Math.min(100, Math.round((sv / SPP_SHORTS_VIEWS_REQUIRED) * 100));
-  const pathMet = state.lfWatchHours >= SPP_WATCH_HOURS_REQUIRED || sv >= SPP_SHORTS_VIEWS_REQUIRED;
-  const reqLeft = (state.subs < SPP_SUBS_REQUIRED ? 1 : 0) + (pathMet ? 0 : 1);
-  const bar = (label, cur, target, fmtFn) => `<div class="meter-row"><div class="meter-label"><span class="name">${label}</span><span class="val">${(fmtFn || fmt)(cur)} / ${(fmtFn || fmt)(target)}</span></div><div class="meter-track"><div class="fill ${cur >= target ? 'met' : ''}" style="width:${Math.min(100, Math.round(cur / target * 100))}%"></div></div></div>`;
-  const tier1 = `
-    <div class="spp-tier ${state.fanFunding ? 'done' : ''}">
-      <div class="spp-tier-head"><span>Tier 1 · Fan funding</span><span class="spp-tier-state">${state.fanFunding ? 'Approved' : 'Unlocks memberships'}</span></div>
-      ${bar('Subscribers', state.subs, FAN_SUBS_REQUIRED)}
-      ${bar('Uploads, last 90 days', uploads90(), FAN_UPLOADS_REQUIRED)}
-      <div class="spp-or-label">Then either one</div>
-      ${bar('Long-form watch hours', state.lfWatchHours, FAN_WATCH_HOURS_REQUIRED)}
-      <div class="spp-or">or</div>
-      ${bar('Shorts views, last 90 days', sv, FAN_SHORTS_VIEWS_REQUIRED, fmtCompact)}
+  const up90 = uploads90();
+  const bar = (label, cur, target, fmtFn) => {
+    const f = fmtFn || fmt, met = cur >= target;
+    return `<div class="meter-row spp-bar ${met ? 'met' : ''}"><div class="meter-label"><span class="name">${met ? ic('check') : ''}${label}</span><span class="val">${f(Math.min(cur, target * 9.99))} / ${f(target)}</span></div><div class="meter-track"><div class="fill ${met ? 'met' : ''}" style="width:${Math.min(100, Math.round(cur / target * 100))}%"></div></div></div>`;
+  };
+  const t1Path = state.lfWatchHours >= FAN_WATCH_HOURS_REQUIRED || sv >= FAN_SHORTS_VIEWS_REQUIRED;
+  const t1Met = (state.subs >= FAN_SUBS_REQUIRED) + (up90 >= FAN_UPLOADS_REQUIRED) + t1Path;
+  const t2Path = state.lfWatchHours >= SPP_WATCH_HOURS_REQUIRED || sv >= SPP_SHORTS_VIEWS_REQUIRED;
+  const t2Met = (state.subs >= SPP_SUBS_REQUIRED) + t2Path;
+  const done = state.fanFunding && state.isMonetized;
+
+  const tier = (cls, n, name, unlocks, approved, met, total, body) => `
+    <div class="spp-tier ${cls} ${approved ? 'done' : ''}">
+      <div class="spp-tier-head">
+        <span class="spp-tier-badge">${approved ? ic('check') : n}</span>
+        <div class="spp-tier-text"><div class="spp-tier-name">${name}</div><div class="spp-tier-unlocks">${unlocks}</div></div>
+        <span class="spp-tier-state">${approved ? 'Approved' : `${met} of ${total} met`}</span>
+      </div>
+      ${approved ? '' : `<div class="spp-tier-body">${body}</div>`}
     </div>`;
-  el.innerHTML = tier1 + `
-    <div class="spp-tier-head" style="margin-top:18px"><span>Tier 2 · Ad revenue</span><span class="spp-tier-state">${state.isMonetized ? 'Approved' : 'Unlocks ads + Shorts feed'}</span></div>
-    <div class="spp-head">
-      <div class="spp-title">${ic('star')}<span>${state.isMonetized ? 'Monetized' : 'Not Eligible Yet'}</span></div>
-      <div class="spp-req-pill ${state.isMonetized ? 'met' : ''}">${state.isMonetized ? 'Eligible' : `${reqLeft} requirement${reqLeft === 1 ? '' : 's'} left`}</div>
-    </div>
-    <div class="meter-row">
-      <div class="meter-label"><span class="name">Subscribers</span><span class="val">${fmt(state.subs)} / ${fmt(SPP_SUBS_REQUIRED)}</span></div>
-      <div class="meter-track"><div class="fill" style="width:${subsPct}%"></div></div>
-    </div>
-    <div class="spp-or-label">Then either one of these</div>
-    <div class="meter-row">
-      <div class="meter-label"><span class="name">Long-form watch hours</span><span class="val">${fmt(state.lfWatchHours)} / ${fmt(SPP_WATCH_HOURS_REQUIRED)}</span></div>
-      <div class="meter-track"><div class="fill" style="width:${hoursPct}%"></div></div>
-    </div>
-    <div class="spp-or">or</div>
-    <div class="meter-row">
-      <div class="meter-label"><span class="name">Shorts views, last 90 days</span><span class="val">${fmt(sv)} / ${fmtCompact(SPP_SHORTS_VIEWS_REQUIRED)}</span></div>
-      <div class="meter-track"><div class="fill" style="width:${shortsPct}%"></div></div>
-    </div>
-    <div class="spp-note">${state.isMonetized ? `Approved through ${state.monetizedVia || 'long-form watch hours'}. Long-form earns ad revenue and Shorts earn from the Shorts feed.` : 'No ad money until tier 2. Views before approval earn nothing.'}</div>
-  `;
+
+  const t1 = tier('t1', 1, 'Fan funding', 'Unlocks channel memberships', state.fanFunding, t1Met, 3,
+    `<div class="spp-req">` + bar('Subscribers', state.subs, FAN_SUBS_REQUIRED) +
+    bar('Uploads, last 90 days', up90, FAN_UPLOADS_REQUIRED) + `</div>` +
+    `<div class="spp-path"><div class="spp-or-label">Then either one</div>` +
+    bar('Long-form watch hours', state.lfWatchHours, FAN_WATCH_HOURS_REQUIRED) +
+    `<div class="spp-or">or</div>` +
+    bar('Shorts views, last 90 days', sv, FAN_SHORTS_VIEWS_REQUIRED, fmtCompact) + `</div>`);
+  const t2 = tier('t2', 2, 'Ad revenue', 'Unlocks ads on long-form and the Shorts feed', state.isMonetized, t2Met, 2,
+    `<div class="spp-req">` + bar('Subscribers', state.subs, SPP_SUBS_REQUIRED) + `</div>` +
+    `<div class="spp-path"><div class="spp-or-label">Then either one</div>` +
+    bar('Long-form watch hours', state.lfWatchHours, SPP_WATCH_HOURS_REQUIRED) +
+    `<div class="spp-or">or</div>` +
+    bar('Shorts views, last 90 days', sv, SPP_SHORTS_VIEWS_REQUIRED, fmtCompact) + `</div>`);
+
+  const spons = !!state.unlocks.sponsorships;
+  const note = state.isMonetized
+    ? `Approved through ${state.monetizedVia || 'long-form watch hours'}. Long-form videos earn ad revenue and Shorts earn from the Shorts feed.`
+    : 'Views earn nothing until tier 2. Tier 1 lets fans support you through memberships first.';
+  const html = `
+    <div class="spp-tiers ${done ? 'compact' : (state.fanFunding || state.isMonetized) ? 'stack' : ''}">${state.isMonetized && !state.fanFunding ? t2 + t1 : t1 + t2}</div>
+    <div class="spp-foot">
+      <div class="spp-extra ${spons ? 'done' : ''}">${spons ? ic('check') : ic('megaphone')}<span>Brand sponsorships</span><span class="spp-extra-val mono">${spons ? 'Unlocked' : `${fmt(state.subs)} / ${fmt(1000)} subs`}</span></div>
+      <div class="spp-note">${note}</div>
+    </div>`;
+  if (html !== _sppHtml){ el.innerHTML = html; _sppHtml = html; }
+  const stEl = document.getElementById('spp-panel-state');
+  if (stEl){
+    const txt = done ? 'Fully monetized' : state.fanFunding ? 'Tier 1 approved' : 'Not eligible yet';
+    if (stEl.textContent !== txt){ stEl.textContent = txt; stEl.className = 'spp-panel-state ' + (done ? 'good' : state.fanFunding ? 'mid' : ''); }
+  }
 }
 
 /* ---------- Rendering: Audience Loyalty + Algorithm Learning (Analytics tab) ---------- */
@@ -3529,7 +3557,7 @@ function renderCreatorFeed(){
     if (state.creatorFeed.length === 0){
       feedEl.innerHTML = `<div class="empty-hint">The feed is quiet — check back after your first upload.</div>`;
     } else {
-      feedEl.innerHTML = state.creatorFeed.slice(0, 4).map(item => {
+      feedEl.innerHTML = state.creatorFeed.slice(0, 6).map(item => {
         const time = feedTimeAgo(item.tick);
         const badge = item.badge ? `<span class="feed-badge ${item.badge.type}">${item.badge.label}</span>` : '';
         if (item.name){
@@ -3676,7 +3704,9 @@ function renderCollabs(){
   const el = document.getElementById('collab-list');
   if (!el) return;
   const rivals = ensureRivals().slice().sort((a, b) => a.subs - b.subs);
-  el.innerHTML = rivals.map(r => {
+  const locked = rivals.filter(r => { const c = collabInfo(r); return c.tooSmall && !c.booking && !c.invited; });
+  const open = rivals.filter(r => !locked.includes(r));
+  let html = open.map(r => {
     const c = collabInfo(r);
     let status, btn;
     if (c.bookedNow){
@@ -3709,6 +3739,16 @@ function renderCollabs(){
         ${btn}
       </div>`;
   }).join('');
+  if (!open.length) html = `<div class="empty-hint">No one will collab yet. Grow a little and creators start answering.</div>`;
+  if (locked.length){
+    const next = locked[0], need = collabInfo(next).needSubs;
+    html += `
+      <div class="collab-locked">
+        <div class="cl-faces">${locked.slice(0, 5).map(r => `<span class="dc-avatar face-avatar">${thumbFace(r.name)}</span>`).join('')}</div>
+        <div class="cl-text"><b>${locked.length} more creator${locked.length === 1 ? '' : 's'}</b> will collab as you grow. Next: ${next.name} at ${fmt(need)} subscribers.</div>
+      </div>`;
+  }
+  if (el._html !== html){ el.innerHTML = html; el._html = html; }
 }
 
 /* ---------- Rewarded ads: daily cap + one entry point ---------- */
@@ -3728,8 +3768,10 @@ function requestRewardedAd(placement, onReward){
       state.adCount++;
       onReward();
     },
-    onNoReward(){
-      showToast(ic('tv') + ` The ad didn't finish, so there's no reward this time.`);
+    onNoReward(reason){
+      showToast(ic('tv') + (reason === 'unavailable'
+        ? ` No ad available right now. Check your connection and try again in a minute.`
+        : ` The ad didn't finish, so there's no reward this time.`));
     },
   });
 }
@@ -3837,7 +3879,10 @@ function renderCooldown(){
 }
 
 /* ---------- Tabs ---------- */
+let currentTab = 'home';
 function switchTab(tab){
+  const changed = tab !== currentTab;
+  currentTab = tab;
   ['home', 'content', 'studio', 'analytics', 'calendar', 'social', 'monetization', 'shop', 'feed', 'settings'].forEach(t => {
     document.getElementById('tab-' + t).classList.toggle('active', t === tab);
   });
@@ -3847,6 +3892,20 @@ function switchTab(tab){
   if (tab === 'settings') renderSettings();
   if (tab === 'calendar') renderCalendar(true);
   if (tab === 'social') renderSocial(true);
+  if (changed) animateTabIn(document.getElementById('tab-' + tab));
+}
+/* Entering a tab: its top-level blocks rise in, lightly staggered. Skipped during the tour
+   (the spotlight measures positions straight away) and for reduced motion. */
+function animateTabIn(el){
+  if (!el) return;
+  try { window.scrollTo(0, 0); } catch(e){}
+  if (REDUCE_MOTION || (window.Tutorial && Tutorial.isActive())) return;
+  el.classList.remove('tab-enter');
+  void el.offsetWidth;
+  Array.from(el.children).forEach((c, i) => c.style.setProperty('--i', Math.min(i, 7)));
+  el.classList.add('tab-enter');
+  clearTimeout(el._enterT);
+  el._enterT = setTimeout(() => el.classList.remove('tab-enter'), 700);
 }
 /* ---------- Appearance: dark / light / system ---------- */
 function resolvedTheme(){
@@ -3886,7 +3945,7 @@ function renderSettings(){
   const nameIn = document.getElementById('set-name-input');
   if (nameIn && document.activeElement !== nameIn) nameIn.value = state.channelName || '';
   const prov = document.getElementById('set-ad-provider');
-  if (prov) prov.textContent = { adsense: 'Google AdSense rewarded ads', crazygames: 'CrazyGames rewarded ads', poki: 'Poki rewarded ads', house: 'House ads while in development (no revenue yet)' }[Ads.provider] || 'House ads';
+  if (prov) prov.textContent = { admob: 'Short video ads, only when you choose to watch', adsense: 'Google AdSense rewarded ads', crazygames: 'CrazyGames rewarded ads', poki: 'Poki rewarded ads', house: 'House ads while in development (no revenue yet)' }[Ads.provider] || 'House ads';
   const sw = (id, on) => { const b = document.getElementById(id); if (b){ b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); } };
   sw('set-sound', state.soundEnabled); sw('set-music', state.musicEnabled);
   const stats = document.getElementById('settings-stats');
@@ -4472,6 +4531,8 @@ function startGame(hadSave){
     location.reload();
   });
   document.getElementById('replay-tutorial').addEventListener('click', () => { if (window.Tutorial) Tutorial.start(); });
+  const privacyBtn = document.getElementById('privacy-options-btn');
+  if (privacyBtn) privacyBtn.addEventListener('click', () => { playClickSound(); Ads.showPrivacyOptions && Ads.showPrivacyOptions(); });
   document.getElementById('export-save').addEventListener('click', () => {
     try {
       const blob = new Blob([JSON.stringify(state)], { type: 'application/json' });
@@ -4516,7 +4577,13 @@ function startGame(hadSave){
 
   Ads.init({
     onStart(){ if (window.Music) Music.duck(true); },
-    onEnd(){ if (window.Music) Music.duck(false); },
+    onEnd(){
+      if (!window.Music) return;
+      Music.duck(false);
+      // a full-screen app ad pauses the game screen, which stops the music; pick it back up
+      if (state.musicEnabled && !document.hidden && Music.ctx && !Music.playing) Music.start();
+    },
+    onPrivacyOptions(){ const row = document.getElementById('privacy-options-row'); if (row) row.style.display = ''; },
   });
   Ads.gameplayStart();
 
@@ -4547,6 +4614,16 @@ function startGame(hadSave){
   if (hadSave) runOfflineProgress();
   safeRenderAll();
   try { renderThumbPreview(); } catch(e){ console.error(e); }
+  gameRunning = true;
+}
+
+/* Android app: back after a while in another app. Same catch-up as reopening the game. */
+var gameRunning = false;
+function catchUpAfterResume(){
+  if (!gameRunning) return;
+  if (state.live) endLiveStream(true); // a stream can't keep going while the app is closed
+  runOfflineProgress();
+  safeRenderAll();
 }
 
 function refreshVideoModal(){

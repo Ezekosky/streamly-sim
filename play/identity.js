@@ -387,14 +387,14 @@ function renderRivalWatch(){
   const rivals = ensureRivals();
   const list = rivals.filter(r => r.peer || (niche && r.topic === niche)).sort((a, b) => b.subs - a.subs).slice(0, 5);
   if (!list.length){ el.innerHTML = `<div class="empty-hint">Rivals appear once you've made a few videos.</div>`; return; }
-  el.innerHTML = list.map(r => {
+  const html = list.map(r => {
     const h = r.hist || [];
     const base = h.length ? h[0] : r.subs;
     const fresh = h.length < 2;                        // not enough daily history for a weekly % yet
     const change = !fresh && base > 0 ? (r.subs - base) / base * 100 : 0;
     const ahead = r.subs > state.subs;
     const tag = r.status || (fresh && r.peer ? 'New' : change > 8 ? 'Rising' : change < -2 ? 'Slumping' : null);
-    return `<div class="rw-row">
+    return `<div class="rw-card"><div class="rw-row">
       <span class="dc-avatar face-avatar">${thumbFace(r.name)}</span>
       <div class="wtf-main">
         <div class="dc-creator-name">${r.name}${tag ? ` <span class="rw-tag ${tag.toLowerCase()}">${tag}</span>` : ''}</div>
@@ -407,6 +407,7 @@ function renderRivalWatch(){
       <div class="rel-bar"><span class="rel-zero"></span><span class="rel-fill ${relOf(r) >= 0 ? 'pos' : 'neg'}" style="${relOf(r) >= 0 ? `left:50%;width:${relOf(r) / 2}%` : `right:50%;width:${-relOf(r) / 2}%`}"></span></div>
       <button class="mini-btn" data-shout="${r.name}" ${(r.shoutCd || 0) > state.totalTicks ? 'disabled' : ''}>Shout out</button>
       <button class="mini-btn danger" data-callout="${r.name}" ${(r.callCd || 0) > state.totalTicks ? 'disabled' : ''}>Call out</button>
-    </div>`;
+    </div></div>`;
   }).join('');
+  if (el._html !== html){ el.innerHTML = html; el._html = html; }
 }

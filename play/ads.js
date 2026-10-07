@@ -9,15 +9,16 @@
    blocker, no fill or an SDK error all go to onNoReward.
 
    Which network runs is decided at startup:
-     1. CrazyGames SDK v3 is on the page  -> CrazyGames rewarded ads
-     2. Poki SDK is on the page           -> Poki rewardedBreak
-     3. Neither                           -> in-game "house ad" (a 15s
+     1. Inside the Android app            -> Google AdMob rewarded ads
+                                             (IDs in app/streamly.config.json)
+     2. CrazyGames SDK v3 is on the page  -> CrazyGames rewarded ads
+     3. Poki SDK is on the page           -> Poki rewardedBreak
+     4. None of these (a plain browser)   -> in-game "house ad" (a 15s
         sponsor spot for fictional brands). House ads keep the game fully
-        playable while you develop, but they EARN NOTHING. Add one of the
-        SDK <script> tags in index.html before you ship.
+        playable while you develop, but they EARN NOTHING.
 
-   For a Google Play build, swap the branch in showRewarded() for your
-   AdMob plugin's rewarded call (see README.md). Same callbacks.
+   onNoReward gets a reason: 'closed' (skipped early) or 'unavailable'
+   (no ad to show right now: offline, no fill, or an SDK error).
    ========================================================================= */
 (function(){
   const HOUSE_AD_SECONDS = 15;
@@ -37,7 +38,10 @@
     init(hooks){
       this.hooks = Object.assign(this.hooks, hooks || {});
       try {
-        if (window.STREAMLY_ADSENSE && typeof window.adBreak === 'function'){
+        if (window.Native && Native.isApp && Native.plugin('AdMob')){
+          this.provider = 'admob';
+          this.admobSetup();
+        } else if (window.STREAMLY_ADSENSE && typeof window.adBreak === 'function'){
           // Google AdSense H5 Games Ads (Ad Placement API). Only works on a domain you own
           // that Google has approved — see README "Real ads".
           this.provider = 'adsense';
@@ -71,12 +75,14 @@
       cb = cb || {};
       if (this.busy) return;
       this.busy = true;
-      const finish = (rewarded) => {
+      const finish = (rewarded, reason) => {
         this.busy = false;
         if (this.hooks.onEnd) this.hooks.onEnd(placement, rewarded);
-        try { rewarded ? (cb.onReward && cb.onReward()) : (cb.onNoReward && cb.onNoReward()); } catch(e){ console.error(e); }
+        try { rewarded ? (cb.onReward && cb.onReward()) : (cb.onNoReward && cb.onNoReward(reason || 'closed')); } catch(e){ console.error(e); }
       };
       if (this.hooks.onStart) this.hooks.onStart(placement);
+
+      if (this.provider === 'admob'){ this.admobShow(finish); return; }
 
       if (this.provider === 'crazygames'){
         try {
@@ -113,6 +119,67 @@
         return;
       }
       this.houseAd(finish);
+    },
+
+    /* ---------- Google AdMob (Android app) ---------- */
+    admob: { ready: false, loading: null, adId: '', testing: true },
+
+    async admobSetup(){
+      const AdMob = Native.plugin('AdMob');
+      const cfg = Native.config || {};
+      this.admob.testing = cfg.testAds !== false;
+      // Google's sample rewarded unit: always fills, never pays. Used until real IDs are set.
+      this.admob.adId = (!this.admob.testing && cfg.rewardedAdId) || 'ca-app-pub-3940256099942544/5224354917';
+      try {
+        await AdMob.initialize({ initializeForTesting: this.admob.testing });
+        // Google's consent message (shown only where the law needs it, e.g. the EU/UK)
+        try {
+          let info = await AdMob.requestConsentInfo();
+          if (info.isConsentFormAvailable && info.status === 'REQUIRED') info = await AdMob.showConsentForm();
+          this.privacyOptionsRequired = info.privacyOptionsRequirementStatus === 'REQUIRED';
+          if (this.privacyOptionsRequired && this.hooks.onPrivacyOptions) this.hooks.onPrivacyOptions();
+        } catch(e){ /* no consent form available: ads still load in regions that don't need one */ }
+        this.admobLoad();
+      } catch(e){ console.warn('AdMob init failed', e); }
+    },
+    showPrivacyOptions(){
+      const AdMob = window.Native && Native.plugin('AdMob');
+      if (AdMob) AdMob.showPrivacyOptionsForm().catch(() => {});
+    },
+    admobLoad(){
+      if (this.admob.ready) return Promise.resolve(true);
+      if (this.admob.loading) return this.admob.loading;
+      const AdMob = Native.plugin('AdMob');
+      this.admob.loading = AdMob.prepareRewardVideoAd({ adId: this.admob.adId, isTesting: this.admob.testing })
+        .then(() => { this.admob.ready = true; return true; })
+        .catch(() => false)
+        .finally(() => { this.admob.loading = null; });
+      return this.admob.loading;
+    },
+    async admobShow(finish){
+      const AdMob = Native.plugin('AdMob');
+      let rewarded = false, settled = false;
+      const handles = [];
+      const done = (ok, reason) => {
+        if (settled) return;
+        settled = true;
+        handles.forEach(h => { try { h.remove(); } catch(e){} });
+        this.admob.ready = false;
+        finish(ok, reason);
+        setTimeout(() => this.admobLoad(), 1500); // have the next one ready
+      };
+      if (!this.admob.ready){
+        if (window.showToast) showToast('Loading ad…');
+        const ok = await this.admobLoad();
+        if (!ok){ done(false, 'unavailable'); return; }
+      }
+      try {
+        handles.push(await AdMob.addListener('onRewardedVideoAdReward', () => { rewarded = true; }));
+        handles.push(await AdMob.addListener('onRewardedVideoAdDismissed', () => done(rewarded, rewarded ? '' : 'closed')));
+        handles.push(await AdMob.addListener('onRewardedVideoAdFailedToShow', () => done(false, 'unavailable')));
+        // resolves only when the reward is earned; a skipped ad just fires Dismissed
+        AdMob.showRewardVideoAd().then(() => { rewarded = true; }).catch(() => done(false, 'unavailable'));
+      } catch(e){ done(false, 'unavailable'); }
     },
 
     /* In-game sponsor spot. Countdown must reach zero before the reward unlocks. */
