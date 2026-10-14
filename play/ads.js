@@ -128,6 +128,8 @@
       const AdMob = Native.plugin('AdMob');
       const cfg = Native.config || {};
       this.admob.testing = cfg.testAds !== false;
+      // the test APK (package ends in .debug) always uses Google's test ads
+      try { const info = await Native.plugin('App').getInfo(); if (info && /\.debug$/.test(info.id || '')) this.admob.testing = true; } catch(e){}
       // Google's sample rewarded unit: always fills, never pays. Used until real IDs are set.
       this.admob.adId = (!this.admob.testing && cfg.rewardedAdId) || 'ca-app-pub-3940256099942544/5224354917';
       try {

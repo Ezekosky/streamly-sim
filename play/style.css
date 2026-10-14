@@ -55,7 +55,6 @@ body{
   font-size:14px;
   -webkit-font-smoothing:antialiased;
   min-height:100vh;
-  padding-bottom:88px;
 }
 .mono{ font-family:var(--font-num); font-variant-numeric:tabular-nums; }
 .display{ font-family:var(--font-display); }
@@ -2934,3 +2933,97 @@ html.is-app .app{
   padding-left:max(env(safe-area-inset-left, 0px), var(--safe-area-inset-left, 0px));
   padding-right:max(env(safe-area-inset-right, 0px), var(--safe-area-inset-right, 0px));
 }
+
+/* =========================================================================
+   v0.9.3 — pickers, lower toasts, exit dialog
+   ========================================================================= */
+/* toasts sit at the bottom edge instead of over the middle of the screen */
+.toast{ bottom:calc(14px + env(safe-area-inset-bottom, 0px)); padding:9px 15px; max-width:min(420px, 86vw); }
+@media (max-width:640px){ .toast{ bottom:calc(80px + env(safe-area-inset-bottom, 0px)); } }
+
+/* duration badge scaled to the small list thumbnails */
+.rv-thumb .lu-dur{ font-size:9px; padding:1px 4px; right:3px; bottom:3px; border-radius:3px; }
+
+/* in-game pickers */
+.gsel-native{ position:absolute !important; opacity:0 !important; pointer-events:none !important; width:1px !important; height:1px !important; overflow:hidden; }
+.gsel-btn{
+  width:100%; display:flex; align-items:center; justify-content:space-between; gap:10px;
+  padding:10px 12px 10px 13px; min-height:40px;
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm);
+  color:var(--text); font-family:var(--font-body); font-size:12.5px; font-weight:500; text-align:left; cursor:pointer;
+  transition:border-color .15s ease, background-color .15s ease, transform .12s ease;
+}
+.gsel-btn:hover:not(:disabled){ border-color:var(--accent); }
+.gsel-btn:active:not(:disabled){ transform:scale(.985); }
+.gsel-btn:disabled{ opacity:.45; cursor:default; }
+.gsel-val{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.gsel-btn svg{ flex:none; width:14px; height:14px; color:var(--faint); }
+.form-field.locked .gsel-btn{ opacity:.45; }
+
+.gsel-overlay{
+  position:fixed; inset:0; z-index:160; display:flex; align-items:center; justify-content:center; padding:16px;
+  background:rgba(4,5,8,.6); opacity:0; pointer-events:none; transition:opacity .18s ease;
+}
+.gsel-overlay.show{ opacity:1; pointer-events:auto; }
+.gsel-sheet{
+  width:min(440px, 100%); max-height:min(560px, calc(100vh - 32px)); display:flex; flex-direction:column;
+  background:var(--surface); border:1px solid var(--border); border-radius:14px; overflow:hidden;
+  box-shadow:0 24px 60px rgba(0,0,0,.45);
+  transform:translateY(12px) scale(.97); transition:transform .24s cubic-bezier(.2,.8,.2,1.1);
+}
+.gsel-overlay.show .gsel-sheet{ transform:none; }
+.gsel-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:14px 14px 10px 18px; border-bottom:1px solid var(--border-soft); }
+.gsel-title{ font-family:var(--font-display); font-weight:600; font-size:14.5px; color:var(--text); }
+.gsel-x{ width:30px; height:30px; display:grid; place-items:center; border-radius:8px; border:none; background:var(--surface-2); color:var(--dim); cursor:pointer; }
+.gsel-x svg{ width:15px; height:15px; }
+.gsel-list{ padding:8px; overflow-y:auto; display:grid; gap:4px; }
+.gsel-list.two{ grid-template-columns:repeat(auto-fill, minmax(190px, 1fr)); }
+.gsel-opt{
+  display:flex; align-items:center; justify-content:space-between; gap:10px; width:100%;
+  padding:12px 14px; border-radius:9px; border:1px solid transparent; background:none;
+  color:var(--text); font-family:var(--font-body); font-size:13px; font-weight:500; text-align:left; cursor:pointer;
+  transition:background-color .15s ease, border-color .15s ease, transform .12s ease;
+}
+.gsel-opt:hover:not(:disabled){ background:var(--surface-2); }
+.gsel-opt:active:not(:disabled){ transform:scale(.98); }
+.gsel-opt.on{ background:var(--accent-soft); border-color:rgba(59,130,246,.45); color:var(--text); }
+.gsel-opt svg{ flex:none; width:16px; height:16px; color:var(--accent); }
+.gsel-opt:disabled{ opacity:.4; cursor:default; }
+[data-theme="light"] .gsel-overlay{ background:rgba(16,19,26,.35); }
+[data-theme="light"] .gsel-sheet{ box-shadow:0 20px 50px rgba(16,19,26,.18); }
+@media (max-height:440px){ .gsel-opt{ padding:10px 12px; } .gsel-head{ padding:11px 12px 8px 16px; } }
+@media (prefers-reduced-motion: reduce){ .gsel-sheet, .gsel-overlay{ transition:none; } }
+
+/* leave-the-game dialog (Android back button on Home) */
+.exit-box{ text-align:left; width:min(360px, 92vw); }
+.exit-box .away-time{ line-height:1.5; margin:6px 0 18px; }
+
+/* =========================================================================
+   v0.9.4 — intro pacing, fixed sidebar
+   ========================================================================= */
+/* Hold every intro animation until the game has finished setting up (boot adds .boot-go).
+   Without this, a slow phone starts the CSS animation while the scripts are still busy,
+   and the logo, sounds and sparks drift out of step. */
+.boot-loader-root:not(.boot-go), .boot-loader-root:not(.boot-go) *,
+.boot-loader-root:not(.boot-go) *::before, .boot-loader-root:not(.boot-go) *::after{ animation-play-state:paused !important; }
+/* the title card's thumbnail wall only scrolls once it's on screen */
+.boot-loader-root:not(.to-game) .st2-col{ animation-play-state:paused !important; }
+.st2-col, .st2-cols, .ae-splash, .ae-mark{ will-change:transform; }
+.st2-wall{ contain:layout paint; }
+/* touch devices: skip the two filter animations (glow and letter blur) that repaint every frame */
+@media (pointer:coarse){
+  .ae-logo{ animation:none !important; filter:none !important; }
+  .st2-l{ filter:none !important; }
+  @keyframes st2Letter{ to{ opacity:1; transform:none; } }
+}
+
+/* sidebar never scrolls away with the page */
+.sidebar{ height:100vh; height:100dvh; overflow-y:auto; overflow-x:hidden; scrollbar-width:none; }
+.sidebar::-webkit-scrollbar{ display:none; }
+@media (max-width:640px){ .sidebar{ height:auto; overflow:visible; } }
+
+/* v0.9.5 rewarded-ad spots */
+.nap-btn{ margin-top:8px; border-color:var(--accent-soft); }
+.nap-btn .inline-ic{ color:var(--accent); }
+.sp-actions{ flex-wrap:wrap; }
+.sp-actions .mini-btn .inline-ic{ margin-right:5px; vertical-align:-2px; }

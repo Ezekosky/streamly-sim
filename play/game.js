@@ -97,9 +97,9 @@ const FORMATS = {
   shorts:   { label: "Shorts",    algoBonus: 3,  ctrBonus: 6,  revenueMult: 0.45, fixedDurationSec: 45, sizeGB: 0.03 }, // algorithm pushes hard, pays less
 };
 const EFFORTS = {
-  quick:    { label: "Quick Edit",    qualityBonus: -8, cooldownTicks: 20 },
-  standard: { label: "Standard Edit", qualityBonus: 4,  cooldownTicks: 45 },
-  polished: { label: "Polished Edit", qualityBonus: 12, cooldownTicks: 90 }, // better score, longer cooldown
+  quick:    { label: "Quick Edit",    qualityBonus: -8, cooldownTicks: 60 },
+  standard: { label: "Standard Edit", qualityBonus: 4,  cooldownTicks: 90 },
+  polished: { label: "Polished Edit", qualityBonus: 12, cooldownTicks: 120 }, // better score, longer wait before the next upload
 };
 
 /* How well a thumbnail style suits a topic's audience — small CTR nudge, and the
@@ -127,6 +127,8 @@ const ENERGY_LENGTH_EXTRA = { m3: 0, m8: 0, m15: 4, m25: 8 };
 const AB_TEST_ENERGY = 4, AB_TEST_COOLDOWN = 10;
 const COLLAB_ENERGY = 25;
 const COFFEE_COST = 8, COFFEE_ENERGY = 15, COFFEE_PER_DAY = 3;
+const NAP_ENERGY = 25, NAP_ADS_PER_DAY = 2, NAP_BELOW = 40;          // rewarded ad: "power nap" when energy runs low
+const BONUS_ADS_PER_DAY = 3, BONUS_GAP_MS = 20 * 60 * 1000, BONUS_FIRST_MS = 10 * 60 * 1000; // occasional cash offer
 
 /* Collabs: a rival will only film with you once you're at least 1/50th of their size. */
 const COLLAB_MIN_RATIO = 1 / 50;
@@ -1528,6 +1530,57 @@ function regenEnergy(ticks){
     pushNotification(ic('bolt') + ` You're feeling like yourself again — energy recovery is back to normal.`);
   }
 }
+/* Rewarded ad: a power nap when energy is low (twice a day, and only below NAP_BELOW) */
+function powerNapAd(){
+  const day = clockDay();
+  if (state.napDay !== day){ state.napDay = day; state.napCount = 0; }
+  if (state.napCount >= NAP_ADS_PER_DAY || state.energy >= NAP_BELOW) return;
+  playClickSound();
+  requestRewardedAd('power_nap', () => {
+    if (state.napDay !== clockDay()){ state.napDay = clockDay(); state.napCount = 0; }
+    state.napCount++;
+    state.energy = Math.min(ENERGY_MAX, state.energy + NAP_ENERGY);
+    showToast(ic('bolt') + ` Power nap: +${NAP_ENERGY} energy`);
+    safeRenderAll();
+  });
+}
+
+/* Rewarded ad: every so often a brand offers quick cash for watching an ad. Real-time
+   spacing (20+ minutes apart, none in the first 10 minutes), 3 a day at most, and never
+   while something else is on screen. */
+let sessionStartMs = Date.now();
+function bonusCashAmount(){
+  const hist = (state.dailyHistory || []).slice(-3);
+  const avgDay = hist.length ? hist.reduce((a, d) => a + (d.money || 0), 0) / hist.length : 0;
+  const amt = 25 + (state.level || 1) * 8 + avgDay * 0.25;
+  return Math.max(25, Math.min(600, Math.round(amt / 5) * 5));
+}
+function maybeOfferBonusCash(){
+  if (!gameRunning || window.__bootActive || offlineFastForward) return;
+  const now = Date.now();
+  if (!state.adBonusAt) state.adBonusAt = now + BONUS_FIRST_MS;
+  if (now < state.adBonusAt || now - sessionStartMs < 3 * 60 * 1000) return;
+  if (!state.tutorialDone || (window.Tutorial && Tutorial.isActive()) || (window.Ads && Ads.busy) || state.live) return;
+  if (document.querySelector('.modal-overlay.show, .gsel-overlay.show, .sit-card.show, .moment-card.show')) return;
+  const day = clockDay();
+  if (state.adBonusDay !== day){ state.adBonusDay = day; state.adBonusCount = 0; }
+  if (state.adBonusCount >= BONUS_ADS_PER_DAY || adsLeftToday() <= 0){ state.adBonusAt = now + BONUS_GAP_MS; return; }
+  state.adBonusAt = now + BONUS_GAP_MS + Math.random() * 10 * 60 * 1000; // 20–30 minutes until the next one
+  const amount = bonusCashAmount();
+  const brand = ['Voltwave', 'PixelPad', 'Crumbs & Co.', 'Loopline Fibre'][Math.floor(Math.random() * 4)];
+  showMoment({ tag: 'Quick sponsor', tone: 'money', title: `+$${fmt(amount)} FROM ${brand.toUpperCase()}`, lines: [`Watch one short ad and ${brand} pays you $${fmt(amount)}.`], actions: [{ label: 'Watch ad', run: () => {
+    requestRewardedAd('bonus_cash', () => {
+      if (state.adBonusDay !== clockDay()){ state.adBonusDay = clockDay(); state.adBonusCount = 0; }
+      state.adBonusCount++;
+      state.money += amount; state.lifetimeRevenue += amount; state.adRevenueTotal += amount;
+      pushTransaction('ad', `${brand} bonus`, amount);
+      playCoinSound();
+      showToast(ic('dollar') + ` +$${fmt(amount)} from ${brand}`);
+      safeRenderAll();
+    });
+  } }] });
+}
+
 function buyCoffee(){
   const day = clockDay();
   if (state.coffeeDay !== day){ state.coffeeDay = day; state.coffeeCount = 0; }
@@ -1657,7 +1710,7 @@ function liveTick(){
     if (window.Music) Music.setMood('calm');
   }
 
-  safeRenderAll();
+  if (!window.__bootActive) safeRenderAll(); // the intro animation gets the phone to itself
 }
 let offlineFastForward = false; // true while replaying time you were away — suppresses per-event toasts
 let lastOfflineGains = null;    // what the "welcome back" modal showed, for the watch-an-ad double
@@ -1909,7 +1962,8 @@ const REDUCE_MOTION = !!(window.matchMedia && window.matchMedia('(prefers-reduce
 function tweenNum(el, value, fmtFn){
   if (!el) return;
   const from = el._tv;
-  if (from == null || from === value || REDUCE_MOTION || document.hidden || el.offsetParent === null || !isFinite(from)){
+  if (el._tvRaf && el._tvTo === value) return; // already heading there; let it land
+  if (from == null || Math.abs(value - from) < 1 || REDUCE_MOTION || document.hidden || el.offsetParent === null || !isFinite(from)){
     if (el._tvRaf){ cancelAnimationFrame(el._tvRaf); el._tvRaf = 0; }
     el._tv = value;
     const t = fmtFn(value);
@@ -1917,6 +1971,7 @@ function tweenNum(el, value, fmtFn){
     return;
   }
   if (el._tvRaf) cancelAnimationFrame(el._tvRaf);
+  el._tvTo = value;
   const start = performance.now(), dur = 650;
   const step = now => {
     const k = Math.min(1, (now - start) / dur), e = 1 - Math.pow(1 - k, 3);
@@ -2597,7 +2652,6 @@ function buildLineChartSVG(values, colorHex, gradId){
       </defs>
       <path d="${areaPath}" fill="url(#${gradId})" stroke="none"/>
       <path d="${linePath}" fill="none" stroke="${colorHex}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-      <circle cx="${last[0].toFixed(1)}" cy="${last[1].toFixed(1)}" r="4" fill="${colorHex}" stroke="#141414" stroke-width="2"/>
     </svg>
   `;
 }
@@ -3837,6 +3891,14 @@ function renderStudioEnergy(){
     coffee.innerHTML = `${ic('coffee')}Coffee break <span>$${COFFEE_COST}, +${COFFEE_ENERGY}</span><em>${COFFEE_PER_DAY - used} left today</em>`;
     coffee.disabled = used >= COFFEE_PER_DAY || state.energy >= ENERGY_MAX;
   }
+  const nap = document.getElementById('nap-btn');
+  if (nap){
+    const day = clockDay();
+    const napsUsed = state.napDay === day ? (state.napCount || 0) : 0;
+    const show = state.energy < NAP_BELOW && napsUsed < NAP_ADS_PER_DAY && adsLeftToday() > 0;
+    nap.style.display = show ? '' : 'none';
+    if (show) nap.innerHTML = `${ic('tv')}Power nap <span>watch an ad, +${NAP_ENERGY}</span><em>${NAP_ADS_PER_DAY - napsUsed} left today</em>`;
+  }
   const abField = document.getElementById('ab-field');
   if (abField){
     const unlocked = !!state.unlocks.customThumbnails;
@@ -3893,6 +3955,7 @@ function switchTab(tab){
   if (tab === 'calendar') renderCalendar(true);
   if (tab === 'social') renderSocial(true);
   if (changed) animateTabIn(document.getElementById('tab-' + tab));
+  try { GameSelect.sync(); } catch(e){}
 }
 /* Entering a tab: its top-level blocks rise in, lightly staggered. Skipped during the tour
    (the spotlight measures positions straight away) and for reduced motion. */
@@ -3968,8 +4031,8 @@ function showOfflineModal(elapsedSec, viewsGained, subsGained, moneyGained){
   const dbl = document.getElementById('offline-double');
   if (dbl){
     dbl.disabled = false;
-    dbl.innerHTML = ic('tv') + 'Watch an ad to double subs and revenue';
-    dbl.style.display = (subsGained > 0 || moneyGained > 0.01) ? '' : 'none';
+    dbl.innerHTML = ic('tv') + `Watch an ad to double your earnings (+$${moneyGained.toFixed(2)})`;
+    dbl.style.display = moneyGained > 0.01 ? '' : 'none';
   }
   document.getElementById('offline-modal').classList.add('show');
 }
@@ -4483,12 +4546,11 @@ function startGame(hadSave){
     requestRewardedAd('offline_double', () => {
       const g = lastOfflineGains;
       g.doubled = true;
-      state.subs += g.subs;
+      // only the money doubles: subscribers and watch time have to be earned
       state.money += g.money;
       state.lifetimeRevenue += g.money;
       state.adRevenueTotal += g.money;
       if (g.money > 0.01) pushTransaction('ad', 'Welcome-back bonus', g.money);
-      document.getElementById('off-subs').textContent = '+' + fmt(g.subs * 2);
       document.getElementById('off-money').textContent = '+$' + (g.money * 2).toFixed(2);
       offlineDoubleBtn.disabled = true;
       offlineDoubleBtn.textContent = 'Doubled';
@@ -4567,6 +4629,8 @@ function startGame(hadSave){
   document.getElementById('topic-tiles').addEventListener('click', () => { renderCtypeChips(); renderThumbPreview(); renderStudioEnergy(); });
   document.getElementById('format-tiles').addEventListener('click', () => { renderThumbPreview(); renderStudioEnergy(); });
   document.getElementById('coffee-btn').addEventListener('click', buyCoffee);
+  const napBtn = document.getElementById('nap-btn');
+  if (napBtn) napBtn.addEventListener('click', powerNapAd);
 
   /* Discover: collab pitches */
   document.getElementById('collab-list').addEventListener('click', (e) => {
@@ -4589,6 +4653,7 @@ function startGame(hadSave){
 
   setInterval(() => { liveTick(); }, 1000);
   setInterval(saveState, 5000);
+  setInterval(maybeOfferBonusCash, 60 * 1000);
   setInterval(maybeTriggerEvent, EVENT_CHECK_MS);
   window.addEventListener('beforeunload', saveState);
 
@@ -4631,7 +4696,7 @@ function refreshVideoModal(){
   if (m && m.classList.contains('show') && vaVideoId) renderVideoAnalytics();
 }
 function safeRenderAll(){
-  const renders = [renderIdentity, renderEquipment, renderStats, renderVideos, renderHome, renderRecentVideos, renderChannelProgress, renderAnalyticsOverview, renderStatusDonut, renderMonetization, renderCooldown, renderCreatorFeed, renderDiscoverFeed, renderWhoToFollow, renderNicheStatus, renderPartnerProgramme, renderSoundToggle, renderMusicToggle, renderGameClock, renderCollabs, renderStudioEnergy, renderCadencePanel, renderStudioCadence, renderPublishSelect, renderSponsorSelect, refreshVideoModal, renderIdentityCard, renderRivalWatch, renderCalendar, renderComingUp, renderDemographics, renderSituations, renderSocial];
+  const renders = [renderIdentity, renderEquipment, renderStats, renderVideos, renderHome, renderRecentVideos, renderChannelProgress, renderAnalyticsOverview, renderStatusDonut, renderMonetization, renderCooldown, renderCreatorFeed, renderDiscoverFeed, renderWhoToFollow, renderNicheStatus, renderPartnerProgramme, renderSoundToggle, renderMusicToggle, renderGameClock, renderCollabs, renderStudioEnergy, renderCadencePanel, renderStudioCadence, renderPublishSelect, renderSponsorSelect, refreshVideoModal, renderIdentityCard, renderRivalWatch, renderCalendar, renderComingUp, renderDemographics, renderSituations, renderSocial, () => GameSelect.sync()];
   renders.forEach(fn => {
     try { fn(); } catch(e){ console.error('Render error in', fn.name, e); }
   });
@@ -4659,7 +4724,7 @@ function safeRenderAll(){
   const REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const STUDIO_MS = REDUCED ? 600 : 6300, TITLE_MS = REDUCED ? 800 : 4300;
   let ready = false, studioDone = false, leaving = false;
-  const t0 = performance.now();
+  let t0 = performance.now(); // reset when the show actually starts (see startShow)
   const setProgress = (pct, text) => { fill.style.width = pct + '%'; if (text) status.textContent = text; };
 
   /* ---------------- sound ---------------- */
@@ -4747,6 +4812,7 @@ function safeRenderAll(){
   const at = (el, fx, fy) => { const r = el.getBoundingClientRect(), rr = root.getBoundingClientRect(); return [r.left - rr.left + r.width * fx, r.top - rr.top + r.height * fy]; };
 
   /* ---------------- studio timeline (matches the CSS delays) ---------------- */
+  function scheduleStudio(){
   if (!REDUCED){
     cue(80, () => SFX.pad());
     cue(200, () => SFX.whoosh(1.25, 300, 2600, 0.1));
@@ -4762,28 +4828,53 @@ function safeRenderAll(){
     cue(3900, () => SFX.whoosh(0.9, 600, 4000, 0.07));
     cue(5000, () => SFX.resolve());
   }
+  }
+
+  /* The show only starts once the heavy setup is finished and a clean frame is on screen.
+     All splash animations are held (CSS: .boot-loader-root:not(.boot-go)) until then, so the
+     logo, sounds and sparks stay in step even on a slow phone. */
+  let started = false;
+  function startShow(){
+    if (started) return;
+    started = true;
+    t0 = performance.now();
+    root.classList.add('boot-go');
+    scheduleStudio();
+    setTimeout(() => { studioDone = true; maybeLeave(); }, STUDIO_MS);
+  }
+  function hideNativeSplash(){
+    try {
+      const sp = window.Native && Native.isApp && Native.plugin('SplashScreen');
+      if (sp) sp.hide({ fadeOutDuration: 260 }).catch(() => {});
+    } catch(e){}
+  }
 
   /* ---------------- real loading ---------------- */
   async function load(){
-    setProgress(8, 'Loading fonts');
+    // 1. the heavy work first, before anything moves: game setup, the title card's
+    //    thumbnail wall, the first render (on a phone the launch screen covers this)
+    setProgress(10, 'Opening your studio');
+    try { init(); } catch(e){ console.error(e); }
+    try { buildWall(); } catch(e){ console.error(e); }
+    try { if (typeof safeRenderAll === 'function') safeRenderAll(); } catch(e){}
+    setProgress(40, 'Loading fonts');
+    const isApp = !!(window.Native && Native.isApp);
+    // 2. hand over from the phone's launch screen and start on a clean frame
+    const go = () => { hideNativeSplash(); setTimeout(() => requestAnimationFrame(() => requestAnimationFrame(startShow)), isApp ? 140 : 0); };
+    if (!isApp) go();
+    // 3. fonts. In the app they're bundled and load in a blink, so they finish behind the
+    //    launch screen (no relayout mid-animation). In a browser they finish in the background.
     const fontJobs = ['400 14px Inter', '500 14px Inter', '600 14px Inter', '800 14px Inter'];
     let done = 0;
     try {
       if (document.fonts && document.fonts.load){
         await Promise.race([
-          Promise.all(fontJobs.map(f => document.fonts.load(f).then(() => { done++; setProgress(8 + Math.round(done / fontJobs.length * 37)); }).catch(() => {}))),
-          new Promise(r => setTimeout(r, 2500)),
+          Promise.all(fontJobs.map(f => document.fonts.load(f).then(() => { done++; setProgress(40 + Math.round(done / fontJobs.length * 60)); }).catch(() => {}))),
+          new Promise(r => setTimeout(r, isApp ? 1200 : 2500)),
         ]);
       }
     } catch(e){}
-    setProgress(50, 'Opening your studio');
-    await new Promise(r => setTimeout(r, 30));
-    try { init(); } catch(e){ console.error(e); }
-    setProgress(75);
-    await new Promise(r => setTimeout(r, 30));
-    // fill the Streamly title card's thumbnail wall now, while the studio logo is still playing
-    try { buildWall(); } catch(e){ console.error(e); }
-    try { if (typeof safeRenderAll === 'function') safeRenderAll(); } catch(e){}
+    if (isApp){ await new Promise(r => requestAnimationFrame(() => setTimeout(r, 30))); go(); }
     setProgress(100, 'Ready');
     ready = true;
     maybeLeave();
@@ -4844,9 +4935,96 @@ function safeRenderAll(){
       if (master && ac){ try { master.gain.linearRampToValueAtTime(0, ac.currentTime + 0.4); setTimeout(() => ac.close(), 600); } catch(e){} }
       // hand over to the game's own music if sound has been unlocked
       try { if (audioUnlocked && state.musicEnabled && window.Music){ Music.attach(audioCtx); Music.start(); } } catch(e){}
+      try { safeRenderAll(); } catch(e){} // the per-second redraw was paused during the intro
     }, 480);
   }
-  setTimeout(() => { studioDone = true; maybeLeave(); }, STUDIO_MS);
   try { localStorage.setItem('streamly_booted', '1'); } catch(e){}
-  load();
+  setTimeout(startShow, 6000); // safety: never sit on a frozen splash
+  setTimeout(load, 0); // after the rest of this file has run (pickers, flags defined further down)
+})();
+
+/* =========================================================================
+   IN-GAME PICKERS
+   Every visible <select> gets a styled button; tapping it opens an in-game
+   sheet instead of the phone's system picker. The real <select> stays in
+   the page (hidden) so all game code keeps reading .value and listening for
+   'change' exactly as before.
+   ========================================================================= */
+const GameSelect = (() => {
+  let overlay = null, current = null;
+  const chevron = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>';
+  const tick = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+  const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+
+  function labelFor(sel){
+    const field = sel.closest('.form-field');
+    const lab = field && field.querySelector('label');
+    if (lab) return lab.childNodes[0] ? lab.childNodes[0].textContent.trim() : lab.textContent.trim();
+    return sel.getAttribute('aria-label') || 'Choose';
+  }
+  function wrap(sel){
+    sel.classList.add('gsel-native');
+    sel.tabIndex = -1;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'gsel-btn';
+    btn.innerHTML = `<span class="gsel-val"></span>${chevron}`;
+    btn.addEventListener('click', () => open(sel));
+    sel.insertAdjacentElement('afterend', btn);
+    sel._gselBtn = btn;
+  }
+  function syncOne(sel){
+    const btn = sel._gselBtn;
+    if (!btn || !btn.isConnected) return;
+    const opt = sel.options[sel.selectedIndex];
+    const txt = opt ? opt.textContent : '';
+    const v = btn.firstChild;
+    if (v.textContent !== txt) v.textContent = txt;
+    if (btn.disabled !== sel.disabled) btn.disabled = sel.disabled;
+  }
+  function sync(){
+    document.querySelectorAll('select:not(.hidden-select)').forEach(sel => {
+      if (!sel._gselBtn || !sel._gselBtn.isConnected) wrap(sel);
+      syncOne(sel);
+    });
+  }
+  function build(){
+    overlay = document.createElement('div');
+    overlay.className = 'gsel-overlay';
+    overlay.innerHTML = `<div class="gsel-sheet" role="dialog" aria-modal="true"><div class="gsel-head"><span class="gsel-title"></span><button type="button" class="gsel-x" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div><div class="gsel-list"></div></div>`;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay || e.target.closest('.gsel-x')){ close(); return; }
+      const row = e.target.closest('[data-gsel-i]');
+      if (!row || row.disabled || !current) return;
+      const sel = current;
+      const i = +row.dataset.gselI;
+      close();
+      if (sel.selectedIndex !== i){
+        sel.selectedIndex = i;
+        sel.dispatchEvent(new Event('input', { bubbles: true }));
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      try { playClickSound(); } catch(err){}
+      syncOne(sel);
+    });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && isOpen()) close(); });
+  }
+  function open(sel){
+    if (sel.disabled) return;
+    if (!overlay) build();
+    current = sel;
+    try { playClickSound(); } catch(e){}
+    overlay.querySelector('.gsel-title').textContent = labelFor(sel);
+    const opts = Array.from(sel.options);
+    const list = overlay.querySelector('.gsel-list');
+    list.classList.toggle('two', opts.length > 6);
+    list.innerHTML = opts.map((o, i) => `<button type="button" class="gsel-opt${i === sel.selectedIndex ? ' on' : ''}" data-gsel-i="${i}" ${o.disabled ? 'disabled' : ''}><span>${esc(o.textContent)}</span>${i === sel.selectedIndex ? tick : ''}</button>`).join('');
+    overlay.classList.add('show');
+    const on = list.querySelector('.gsel-opt.on');
+    if (on) on.scrollIntoView({ block: 'nearest' });
+  }
+  function close(){ if (overlay) overlay.classList.remove('show'); current = null; }
+  function isOpen(){ return !!(overlay && overlay.classList.contains('show')); }
+  return { sync, open, close, isOpen };
 })();

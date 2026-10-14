@@ -175,7 +175,7 @@ function announceOffer(d){
   pushNotification(ic('gift') + ` ${d.brand} wants you to promote their ${d.product}: $${fmt(d.payment)} for a ${TOPICS[d.topic].label} video with ${fmt(d.minViews)}+ views.`);
   showMoment({ tag: d.repeat ? 'Repeat sponsor' : 'Sponsor offer', tone: 'money', title: `${d.brand.toUpperCase()} OFFER`, lines: [
     `Promote our ${d.product}.`, `Payment: $${fmt(d.payment)}`, `Required topic: ${TOPICS[d.topic].label}`, `Deadline: ${d.dueDays} days after you accept`, `Minimum views: ${fmt(d.minViews)}`,
-  ], actions: [{ label: 'View offer', tab: 'monetization', sub: 'sponsor' }] });
+  ], actions: [{ label: 'View offer', tab: 'monetization', sub: 'sponsor' }, { label: 'Ask for more (ad)', run: () => negotiateDeal(d.id) }] });
 }
 function settleDeal(d, v){
   const book = sponsorBook();
@@ -213,6 +213,21 @@ function acceptDeal(id){
   showToast(ic('gift') + ` Deal signed with ${d.brand}. Upload a ${TOPICS[d.topic].label} video and pick them under Sponsor in the Studio.`, true);
   safeRenderAll();
 }
+/* Rewarded ad: ask a brand for more money, once per offer */
+const NEGOTIATE_MULT = 1.25;
+function negotiateDeal(id){
+  const d = sponsorBook().deals.find(x => x.id === id); if (!d || d.status !== 'offer' || d.negotiated) return;
+  playClickSound();
+  requestRewardedAd('sponsor_more', () => {
+    if (d.status !== 'offer' || d.negotiated) return;
+    const before = d.payment;
+    d.payment = Math.round(d.payment * NEGOTIATE_MULT / 5) * 5;
+    d.negotiated = true;
+    playCoinSound();
+    showToast(ic('gift') + ` ${d.brand} agreed: $${fmt(before)} → $${fmt(d.payment)}`, true);
+    safeRenderAll();
+  });
+}
 function declineDeal(id){
   const d = sponsorBook().deals.find(x => x.id === id); if (!d || d.status !== 'offer') return;
   d.status = 'declined'; playClickSound(); safeRenderAll();
@@ -249,7 +264,7 @@ function renderSponsorDetail(el){
       <div class="sp-head"><span class="sp-brand">${d.brand.toUpperCase()}${d.repeat ? ' <i class="sp-rep">Repeat</i>' : ''}</span><b>$${fmt(d.payment)}</b></div>
       <div class="sp-line">Promote our ${d.product}.</div>
       <div class="sp-meta"><span>Topic: ${TOPICS[d.topic].label}</span><span>Min views: ${fmt(d.minViews)}</span><span>${d.status === 'offer' ? `Deadline: ${d.dueDays} days` : `Due ${formatTick(d.dueAt).replace(/^Day /, 'day ')}`}</span></div>
-      ${d.status === 'offer' ? `<div class="sp-actions"><button class="mini-btn" data-sp-accept="${d.id}">Accept</button><button class="mini-btn" data-sp-decline="${d.id}">Decline</button><span class="sp-exp">Offer ends in ${Math.max(1, Math.round((d.expiresAt - state.totalTicks) / 60))}h</span></div>` : ''}
+      ${d.status === 'offer' ? `<div class="sp-actions"><button class="mini-btn" data-sp-accept="${d.id}">Accept</button>${d.negotiated ? '' : `<button class="mini-btn" data-sp-nego="${d.id}">${ic('tv')}Ask for ${Math.round((NEGOTIATE_MULT - 1) * 100)}% more</button>`}<button class="mini-btn" data-sp-decline="${d.id}">Decline</button><span class="sp-exp">Offer ends in ${Math.max(1, Math.round((d.expiresAt - state.totalTicks) / 60))}h</span></div>` : ''}
       ${d.status === 'active' ? (() => {
         const v = d.videoId && state.videos.find(x => x.id === d.videoId);
         if (!v) return `<div class="sp-prog warn">Waiting for a ${TOPICS[d.topic].label} video. Pick ${d.brand} under Sponsor in the Studio.</div>`;
@@ -389,7 +404,8 @@ function initSocialUI(){
     if (c) callOut(c.dataset.callout);
   });
   document.getElementById('mon-detail').addEventListener('click', (e) => {
-    const a = e.target.closest('[data-sp-accept]'), d = e.target.closest('[data-sp-decline]');
+    const a = e.target.closest('[data-sp-accept]'), d = e.target.closest('[data-sp-decline]'), n = e.target.closest('[data-sp-nego]');
+    if (n) negotiateDeal(n.dataset.spNego);
     if (a) acceptDeal(a.dataset.spAccept);
     if (d) declineDeal(d.dataset.spDecline);
   });

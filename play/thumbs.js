@@ -392,7 +392,7 @@
     // frame vignette, ties the whole thing together
     body += `<rect width="${W}" height="${H}" fill="${G.rad([['#000', 0], ['#000', .16]], .5, .5, .75)}"/>`;
 
-    return `<svg class="thumb-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>${G.defs.join('')}</defs>${body}</svg>`;
+    return `<svg class="thumb-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${defsBlock(G.defs)}${body}</svg>`;
   }
 
   function faceSVG(seed){
@@ -401,8 +401,36 @@
     const pairs = [['#3b82f6', '#1e40af'], ['#f59e0b', '#b45309'], ['#22c55e', '#15803d'], ['#a78bfa', '#6d28d9'], ['#ef4444', '#991b1b'], ['#06b6d4', '#0e7490']];
     const [c1, c2] = pick(r, pairs);
     const body = `<rect x="-20" y="-20" width="40" height="40" fill="${G.lin([[c1], [c2]])}"/><circle cx="0" cy="-2" r="16" fill="#fff" opacity=".08"/>${face(seed, 0, 6, 1.12, 'neutral', false, G)}`;
-    return `<svg class="face-svg" viewBox="-20 -20 40 40" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>${G.defs.join('')}</defs>${body}</svg>`;
+    return `<svg class="face-svg" viewBox="-20 -20 40 40" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${defsBlock(G.defs)}${body}</svg>`;
   }
+
+  /* Shared gradient store. Many copies of the same thumbnail sit on the page at once (Home,
+     Content, Studio...), each with the same gradient ids. Browsers resolve url(#id) to the
+     FIRST element with that id, and if that copy is inside a hidden tab the gradient doesn't
+     paint (skies and backgrounds went missing). So every gradient lives once in a tiny,
+     never-hidden <svg> at the top of <body>, and thumbnails only reference it. */
+  const registered = new Set();
+  let defsEl = null;
+  function shareDefs(defs){
+    if (typeof document === 'undefined' || !document.body) return false;
+    if (!defsEl){
+      const sprite = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      sprite.setAttribute('aria-hidden', 'true');
+      sprite.setAttribute('width', '0'); sprite.setAttribute('height', '0');
+      sprite.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden;pointer-events:none';
+      defsEl = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+      sprite.appendChild(defsEl);
+      document.body.insertBefore(sprite, document.body.firstChild);
+    }
+    let add = '';
+    defs.forEach(d => {
+      const id = (d.match(/id="([^"]+)"/) || [])[1];
+      if (id && !registered.has(id)){ registered.add(id); add += d; }
+    });
+    if (add) defsEl.insertAdjacentHTML('beforeend', add);
+    return true;
+  }
+  const defsBlock = defs => shareDefs(defs) ? '' : `<defs>${defs.join('')}</defs>`;
 
   const cache = new Map();
   function memo(fn, prefix){

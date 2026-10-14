@@ -24,7 +24,6 @@
 
   const CATCH_UP_AFTER_MS = 60 * 1000; // a quick app switch just carries on
   let pausedAt = 0;
-  let exitArmedUntil = 0;
 
   function hideBars(){
     try { const sb = window.capacitorExports && window.capacitorExports.SystemBars; if (sb) sb.hide(); } catch(e){}
@@ -34,6 +33,7 @@
   function handleBack(){
     if (window.Tutorial && Tutorial.isActive()) return;          // the tour has its own Back button
     if (window.Ads && Ads.busy) return;                           // an ad is on screen
+    if (typeof GameSelect !== 'undefined' && GameSelect.isOpen()){ GameSelect.close(); return; }
     const openMenu = document.querySelector('.range-menu.open');
     if (openMenu){ openMenu.classList.remove('open'); return; }
     const sit = document.getElementById('sit-card');
@@ -48,14 +48,37 @@
     const moment = document.getElementById('moment-card');
     if (moment && moment.classList.contains('show')){ moment.classList.remove('show'); return; }
     if (typeof currentTab !== 'undefined' && currentTab !== 'home' && typeof switchTab === 'function'){ switchTab('home'); return; }
-    if (Date.now() < exitArmedUntil){
-      try { saveState(); } catch(e){}
-      const App = plugin('App');
-      if (App) App.exitApp();
-      return;
+    askToLeave();
+  }
+
+  /* "Leave the game?" — shown when Back is pressed on Home with nothing else open */
+  function askToLeave(){
+    let m = document.getElementById('exit-modal');
+    if (!m){
+      m = document.createElement('div');
+      m.className = 'modal-overlay';
+      m.id = 'exit-modal';
+      m.innerHTML = `
+        <div class="modal-box exit-box">
+          <h3>Leave Streamly Sim?</h3>
+          <div class="away-time">Your progress is saved. Your videos keep getting views for up to 8 hours while you're away.</div>
+          <div class="modal-btn-row">
+            <button class="modal-close cancel" id="exit-stay">Keep playing</button>
+            <button class="modal-close" id="exit-leave">Leave</button>
+          </div>
+        </div>`;
+      document.body.appendChild(m);
+      m.addEventListener('click', (e) => { if (e.target === m) m.classList.remove('show'); });
+      m.querySelector('#exit-stay').addEventListener('click', () => { try { playClickSound(); } catch(e){} m.classList.remove('show'); });
+      m.querySelector('#exit-leave').addEventListener('click', () => {
+        m.classList.remove('show');
+        try { saveState(); } catch(e){}
+        const App = plugin('App');
+        if (App) App.exitApp();
+      });
     }
-    exitArmedUntil = Date.now() + 2000;
-    if (typeof showToast === 'function') showToast('Press back again to leave. Your progress is saved.');
+    try { playClickSound(); } catch(e){}
+    m.classList.add('show');
   }
 
   function onPause(){
@@ -86,8 +109,9 @@
         App.addListener('resume', onResume);
       }
       // Wording that only made sense in a browser
-      const saveNote = document.querySelector('#tab-settings .set-note');
-      if (saveNote && /browser/.test(saveNote.textContent)) saveNote.textContent = 'Progress saves automatically on this phone. Uninstalling the app or clearing its data deletes it.';
+      document.querySelectorAll('#tab-settings .set-note').forEach(n => {
+        if (/browser/.test(n.textContent)) n.textContent = 'Progress saves automatically on this phone. Uninstalling the app or clearing its data deletes it.';
+      });
       const exportBtn = document.getElementById('export-save');
       if (exportBtn) exportBtn.style.display = 'none';
     },
