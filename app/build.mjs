@@ -87,6 +87,8 @@ async function buildWeb(){
     android: { allowMixedContent: false, captureInput: true, webContentsDebuggingEnabled: false },
     plugins: {
       SystemBars: { insetsHandling: 'css', hidden: true, style: 'DARK', initialViewportFitValueHint: 'cover' },
+      // the launch screen stays up while the game sets itself up, then fades into the intro
+      SplashScreen: { launchAutoHide: true, launchShowDuration: 4000, launchFadeOutDuration: 260, backgroundColor: cfg.backgroundColor, showSpinner: false },
     },
   };
   fs.writeFileSync(path.join(HERE, 'capacitor.config.json'), JSON.stringify(capConfig, null, 2));
@@ -158,6 +160,14 @@ function buildAndroid(){
     }$1`, 'the buildTypes block');
     gradle = replaceOnce(gradle, /(buildTypes\s*\{\s*release\s*\{)/, `$1
             if (System.getenv("KEYSTORE_FILE")) { signingConfig signingConfigs.release }`, 'the release build type');
+  }
+  // The test APK installs as a separate app (…streamlysim.debug) next to the Play version,
+  // and the game always shows Google's test ads in it, so play-testing never touches real ads.
+  if (!gradle.includes('applicationIdSuffix')){
+    gradle = replaceOnce(gradle, /(buildTypes\s*\{)/, `$1
+        debug {
+            applicationIdSuffix ".debug"
+        }`, 'the buildTypes block (debug)');
   }
   fs.writeFileSync(gradlePath, gradle);
 
