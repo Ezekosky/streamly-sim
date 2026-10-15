@@ -1,0 +1,5 @@
+# The game files are only used to build the Android app (GitHub Actions), not for the website.
+play
+app
+.github
+DEPLOY.md
