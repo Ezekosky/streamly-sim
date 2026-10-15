@@ -4,14 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Streamly Sim — build a channel from zero</title>
-<meta name="description" content="A free creator-life sim in your browser. Pick topics, chase the algorithm, get into the Partner Programme and try not to burn out. By AetherEdge Studios.">
+<meta name="description" content="A free creator-life sim for Android. Pick topics, chase the algorithm, get into the Partner Programme and try not to burn out. By AetherEdge Studios.">
 <meta name="theme-color" content="#0a0a0a">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
-<link rel="canonical" href="https://YOUR-DOMAIN.com/">
+<link rel="canonical" href="https://streamly-sim.vercel.app/">
 <meta property="og:type" content="website">
 <meta property="og:title" content="Streamly Sim — build a channel from zero">
-<meta property="og:description" content="A free creator-life sim in your browser. Your first videos will flop. That's the point.">
-<meta property="og:image" content="/og.png">
+<meta property="og:description" content="A free creator-life sim for Android. Your first videos will flop. That's the point.">
+<meta property="og:image" content="https://streamly-sim.vercel.app/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -46,6 +46,7 @@
   .btn-ghost{ border:1px solid var(--border); color:var(--text); }
   .btn-ghost:hover{ background:var(--surface-2); }
   .btn svg{ width:15px; height:15px; }
+  .play-btn:not([target]){ cursor:default; }
 
   /* hero */
   .hero{ padding:88px 0 56px; display:grid; grid-template-columns:minmax(0,1.05fr) minmax(0,1fr); gap:48px; align-items:center; }
@@ -154,7 +155,7 @@
     <div class="nav-links">
       <a class="hide-sm" href="#features">Features</a>
       <a class="hide-sm" href="/privacy">Privacy</a>
-      <a class="btn btn-primary" href="/play/">Play free</a>
+      <a class="btn btn-primary play-btn" data-play href="#get"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4.2 2.6c-.3.3-.4.7-.4 1.2v16.4c0 .5.1.9.4 1.2l9.3-9.4L4.2 2.6zm10.6 10.8 2.6 2.6-11 6.3 8.4-8.9zm3.9-3.9c.9.5 1.3 1.2 1.3 2.5s-.4 2-1.3 2.5l-2.6 1.5-2.8-2.8 2.8-2.8 2.6 1.5zM5.4 1.9l11 6.3-2.6 2.6-8.4-8.9z"/></svg><span>Coming soon</span></a>
     </div>
   </div>
 </nav>
@@ -162,14 +163,13 @@
 <main class="wrap">
   <div class="hero">
     <div>
-      <div class="eyebrow"><span class="rec"></span>Free browser game · desktop and mobile (landscape)</div>
+      <div class="eyebrow"><span class="rec"></span>Free Android game · <span data-play-status>coming soon to Google Play</span></div>
       <h1>Build a channel<br>from zero.<br><span class="quiet">Try not to burn out.</span></h1>
       <p class="lede">Streamly Sim is a creator-life simulator. Pick your topics, design thumbnails, read your analytics, and fight your way into the Partner Programme. Your first videos will flop. That's the point.</p>
       <div class="cta">
-        <a class="btn btn-primary" href="/play/"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>Play now, it's free</a>
-        <a class="btn btn-ghost" href="https://aetheredge-studios.itch.io/" target="_blank" rel="noopener">Also on itch.io</a>
+        <a class="btn btn-primary play-btn" data-play id="get" href="#get"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4.2 2.6c-.3.3-.4.7-.4 1.2v16.4c0 .5.1.9.4 1.2l9.3-9.4L4.2 2.6zm10.6 10.8 2.6 2.6-11 6.3 8.4-8.9zm3.9-3.9c.9.5 1.3 1.2 1.3 2.5s-.4 2-1.3 2.5l-2.6 1.5-2.8-2.8 2.8-2.8 2.6 1.5zM5.4 1.9l11 6.3-2.6 2.6-8.4-8.9z"/></svg><span>Coming soon on Google Play</span></a>
       </div>
-      <div class="meta">No download, no sign-up. Progress saves in your browser.</div>
+      <div class="meta">Free to play. No sign-up. Your progress saves on your phone.</div>
     </div>
     <div class="wall" aria-hidden="true">
       <div class="wall-cols"><div class="wall-col a" id="col-a"></div><div class="wall-col b" id="col-b"></div></div>
@@ -229,7 +229,7 @@
   <div class="wrap">
     <h2>Your first upload is waiting.</h2>
     <p class="lede">A one-minute tour shows you everything. Then it's you and the algorithm.</p>
-    <div class="cta"><a class="btn btn-primary" href="/play/">Start your channel</a></div>
+    <div class="cta"><a class="btn btn-primary play-btn" data-play href="#get"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4.2 2.6c-.3.3-.4.7-.4 1.2v16.4c0 .5.1.9.4 1.2l9.3-9.4L4.2 2.6zm10.6 10.8 2.6 2.6-11 6.3 8.4-8.9zm3.9-3.9c.9.5 1.3 1.2 1.3 2.5s-.4 2-1.3 2.5l-2.6 1.5-2.8-2.8 2.8-2.8 2.6 1.5zM5.4 1.9l11 6.3-2.6 2.6-8.4-8.9z"/></svg><span>Coming soon on Google Play</span></a></div>
   </div>
 </section>
 
@@ -240,7 +240,23 @@
   </div>
 </footer>
 
-<script src="/play/thumbs.js"></script>
+<script src="/thumbs.js"></script>
+<script>
+  /* ============ GOOGLE PLAY BUTTONS ============
+     Once Streamly Sim is live on Google Play, change false to true below.
+     Every button then says "Get it on Google Play" and opens the store page. */
+  const PLAY_LIVE = false;
+  const PLAY_URL = 'https://play.google.com/store/apps/details?id=com.aetheredgestudios.streamlysim';
+  if (PLAY_LIVE) {
+    document.querySelectorAll('[data-play]').forEach(a => {
+      a.href = PLAY_URL; a.target = '_blank'; a.rel = 'noopener';
+      a.querySelector('span').textContent = a.closest('nav') ? 'Get it' : 'Get it on Google Play';
+    });
+    document.querySelectorAll('[data-play-status]').forEach(e => e.textContent = 'out now on Google Play');
+  } else {
+    document.querySelectorAll('[data-play]').forEach(a => a.addEventListener('click', e => e.preventDefault()));
+  }
+</script>
 <script>
   // Fill the wall with real in-game thumbnails, generated live.
   (function(){
