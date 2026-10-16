@@ -220,6 +220,17 @@ function calendarEvents(fromDay, toDay){
       title: `${T(top)} ${ahead ? 'looks hot' : 'is trending'} (${ahead >= 2 ? '~' : ''}${val >= 0 ? '+' : ''}${val}%)`,
       sub: `${ARCH_LABEL[trendingArch(d)]} are the hot video type${lowVal <= -12 ? ` · ${T(low)} is cold` : ''}${ahead ? ' · ' + forecastLabel(ahead).toLowerCase() : ''}` });
   }
+  // your weekly plan
+  if (typeof planFor === 'function') for (let d = Math.max(fromDay, clockDay()); d <= toDay; d++){
+    const p = planFor(d);
+    if (!p) continue;
+    const kept = (state.planKept || []).includes(d);
+    ev.push({ day: d, allDay: true, minor: true, at: dayStartTick(d), cat: 'plan',
+      title: p === 'rest' ? 'Rest day' : `Plan: ${planLabel(p, true)}${kept ? ' (done)' : ''}`,
+      sub: p === 'rest' ? 'Energy comes back 50% faster until you upload. Your upload plan skips today.'
+        : p === 'any' ? `Any upload counts: +${planBonusPct('any')}% views`
+        : `A ${TOPICS[p].label} upload gets +${planBonusPct('topic')}% views and costs ${PLAN_ENERGY_DISCOUNT} less energy` });
+  }
   // your scheduled uploads
   state.videos.forEach(v => {
     if (!v.publishAt || v.publishAt <= now || v.publishPhase === 'live' || !v.publishPhase) return;
@@ -260,7 +271,7 @@ function calendarEvents(fromDay, toDay){
     add({ at: t, cat: 'bill', warn: short, title: `Internet bill: $${tier.monthlyBill}`, sub: short ? `You have $${state.money.toFixed(2)}. If you can't pay, your speed gets throttled.` : `${tier.name} · paid automatically` });
     const capped = Number.isFinite(tier.dataCapGB);
     add({ at: t, cat: 'bill', warn: capped && state.dataUsedGB >= tier.dataCapGB * 0.85,
-      title: 'Data plan renews', sub: capped ? `${state.dataUsedGB.toFixed(1)} of ${tier.dataCapGB} GB used · resets when the bill is paid` : 'Unlimited data on your plan', action: capped ? { label: 'Shop', tab: 'shop' } : null });
+      title: 'Data plan renews', sub: capped ? `${state.dataUsedGB.toFixed(1)} of ${tier.dataCapGB} GB used · resets when the bill is paid` : 'Unlimited data on your plan', action: capped ? { label: 'Get data', tab: 'shop', gear: true } : null });
   }
   // upload-plan checks (judged at midnight, shown at the end of the day they cover)
   if ((state.uploadLog || []).length){
@@ -319,6 +330,7 @@ function renderCalendar(force){
   const tab = document.getElementById('tab-calendar');
   if (!root || !tab || !tab.classList.contains('active')) return;
   if (!force && ((!calDirty && Date.now() - calRenderedAt < 4000) || calPointerDown)) return;
+  try { if (GameSelect.isOpen()) return; } catch(e){}   // a weekly-plan picker is open
   calDirty = false; calRenderedAt = Date.now();
 
   const days = calendarDays(), today = days[0];
@@ -337,7 +349,8 @@ function renderCalendar(force){
     const warn = evs.some(e => e.warn);
     return `<button class="cal-day${d === sel ? ' on' : ''}${d === today ? ' today' : ''}" data-cal-day="${d}">
       <span class="cd-name">${calDayName(d)}</span>
-      <span class="cd-num">Day ${d + 1}</span>
+      <span class="cd-num">${typeof weekdayName === 'function' ? weekdayName(d, true) + ' · ' : ''}Day ${d + 1}</span>
+      ${typeof planFor === 'function' && planFor(d) ? `<span class="cd-plan p-${planFor(d) === 'rest' ? 'rest' : planFor(d) === 'any' ? 'any' : 'topic'}">${planLabel(planFor(d))}${(state.planKept || []).includes(d) ? ' ' + ic('check') : ''}</span>` : ''}
       ${top ? `<span class="cd-trend ${top[1] >= 15 ? 'hot' : ''}">${ic(TOPIC_ICONS[top[0]] || 'fire')}${TOPICS[top[0]].label}</span>` : ''}
       <span class="cd-dots">${cats.map(c => `<i class="c-${c}"></i>`).join('')}${evs.length ? `<b>${evs.length}</b>` : '<em>Free</em>'}${warn ? '<span class="cd-warn">!</span>' : ''}</span>
     </button>`;
@@ -403,6 +416,7 @@ function renderCalendar(force){
     </div>
     <div class="cal-filters" id="cal-filters">${Object.entries(CAL_CATS).map(([k, c]) => `<button class="cal-filter c-${k}${calHidden[k] ? '' : ' on'}" data-cal-cat="${k}"><i></i>${c.label}</button>`).join('')}</div>
     <div class="cal-week" id="cal-week">${week}</div>
+    ${typeof weekPlanEditorHTML === 'function' ? `<div class="panel-box cal-weekplan" id="cal-weekplan"><h3>Weekly plan<span class="cal-count">${scheduleSummary() || 'Plan which days you post, what about, and when you rest'}</span></h3>${weekPlanEditorHTML('calendar')}</div>` : ''}
     <div class="cal-grid">
       <div class="panel-box cal-agenda">
         <h3>${calDayName(sel)}${sel !== today && sel !== today + 1 ? '' : ` · Day ${sel + 1}`}<span class="cal-count">${busy ? busy + ' planned' : 'Nothing planned'}</span></h3>
@@ -425,6 +439,7 @@ function renderCalendar(force){
         </div>
       </div>
     </div>`;
+  try { GameSelect.sync(); } catch(e){}
 }
 
 /* ---------------- Home: coming up ---------------- */
@@ -488,7 +503,7 @@ function initCalendarUI(){
         if (a.collab){ startCollab(a.collab); renderCalendar(true); return; }
         if (a.sit){ showSituationCard(a.sit); return; }
         if (a.tease){ socialDraft = { type: 'tease', target: a.tease, caption: 0 }; switchTab('social'); return; }
-        if (a.tab){ switchTab(a.tab); if (a.sub){ const s = document.querySelector(`[data-msub="${a.sub}"]`); if (s) s.click(); } }
+        if (a.tab){ switchTab(a.tab); if (a.gear && typeof setCustView === 'function') setCustView('gear'); if (a.sub){ const s = document.querySelector(`[data-msub="${a.sub}"]`); if (s) s.click(); } }
       }
     });
   }

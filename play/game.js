@@ -1049,6 +1049,17 @@ function decideOutcome(v){
     v.baseRate = r.baseRate; floorFrac = r.floorFrac; v.decayFactor = r.decayFactor; v.pulseChance = r.pulseChance;
     v.spikeMult = r.spike || 1;
   }
+  // Creator archetype: trend chasers launch hard and fade, evergreen creators keep getting found.
+  if (typeof styleOutcome === 'function'){
+    const r = styleOutcome(v, { baseRate: v.baseRate, floorFrac, decayFactor: v.decayFactor, pulseChance: v.pulseChance });
+    v.baseRate = r.baseRate; floorFrac = r.floorFrac; v.decayFactor = r.decayFactor; v.pulseChance = r.pulseChance;
+  }
+  // Weekly plan: viewers who know your schedule turn up for it.
+  if (v.planBonus > 0){
+    v.baseRate *= 1 + v.planBonus;
+    floorFrac *= 1 + v.planBonus;
+    if (Number.isFinite(v.authorityCap)) v.authorityCap *= 1 + v.planBonus;
+  }
   v.baseRate *= timeOfDayMult(typeof v.publishHour === 'number' ? v.publishHour : Math.floor(clockMinute(state.totalTicks) / 60));
   // Retention and satisfaction nudge decay speed: sticky, well-loved videos decline slower.
   v.decayFactor = clamp(v.decayFactor + (v.retention - 50) / 2500 + (v.satisfaction - 50) / 4000, 0.92, 0.996);
@@ -1396,13 +1407,17 @@ function formatDuration(minutes){
 function videoThumb(v){
   return thumbSVG({
     seed: v.id, topic: v.topic, style: v.thumb, title: v.title,
-    face: state.channelName || 'me',
+    face: typeof playerFaceSeed === 'function' ? playerFaceSeed() : (state.channelName || 'me'),
     guestFace: v.collab ? v.collab.name : null,
   }) + (v.ab && !v.ab.resolved ? `<span class="thumb-tag ab">A/B</span>` : '')
      + (v.format === 'shorts' ? `<span class="thumb-tag shorts">Short</span>` : '')
      + (v.isVod ? `<span class="thumb-tag vod">Stream</span>` : '');
 }
-function thumbFace(seed){ return faceSVG(seed); }
+function thumbFace(seed){
+  // your own name anywhere (Feed, Calendar...) shows the picture you chose
+  if (seed && seed === state.channelName && typeof playerAvatarSVG === 'function') return playerAvatarSVG();
+  return faceSVG(seed);
+}
 /* legacy gradient kept only as a fallback background behind the SVG */
 const THUMB_GRADIENTS = [
   ['#4d8dff', '#7c5cff'], ['#7c5cff', '#ec4899'], ['#ec4899', '#fb7185'],
@@ -1504,10 +1519,11 @@ function applyInactivityPenalty(){
 }
 
 /* ---------- Creator energy ---------- */
-function energyCostFor(effortKey, lengthKey, formatKey, withAB, topicKey, typeId){
+function energyCostFor(effortKey, lengthKey, formatKey, withAB, topicKey, typeId, publishAt){
   let cost = (ENERGY_COST[effortKey] || 20) + (formatKey === 'shorts' ? -3 : (ENERGY_LENGTH_EXTRA[lengthKey] || 0));
   if (withAB) cost += AB_TEST_ENERGY;
   if (topicKey) cost += ARCHETYPES[findType(topicKey, typeId).arch].energy;
+  if (topicKey && typeof planEnergyDiscount === 'function') cost -= planEnergyDiscount(topicKey, publishAt);   // planned ahead: already prepared
   return Math.max(6, cost + cadence().energyExtra);
 }
 /* How much a given upload will be hurt: 0 when you finish above the fatigue line. */
@@ -1523,7 +1539,8 @@ function spendEnergy(cost){
 }
 function regenEnergy(ticks){
   if (state.energy >= ENERGY_MAX) return;
-  const rate = ENERGY_REGEN_PER_TICK * (state.burnedOut ? ENERGY_BURNOUT_REGEN_MULT : 1) * cadence().energyRegen;
+  const rate = ENERGY_REGEN_PER_TICK * (state.burnedOut ? ENERGY_BURNOUT_REGEN_MULT : 1) * cadence().energyRegen
+    * (typeof planRegenMult === 'function' ? planRegenMult() : 1);   // rest days on your plan, or a week with no day off
   state.energy = Math.min(ENERGY_MAX, state.energy + ticks * rate);
   if (state.burnedOut && state.energy >= 50){
     state.burnedOut = false;
@@ -1602,11 +1619,11 @@ function buyCoffee(){
 function advanceGlobalTicks(n){
   // Step hour by hour, so every daily and hourly check sees the time it is actually about
   // (a long absence replays in order, instead of judging every skipped day by the moment you return).
-  regenEnergy(n);
   const end = state.totalTicks + n;
   while (state.totalTicks < end){
     const prevTicks = state.totalTicks;
     state.totalTicks = Math.min(end, (Math.floor(prevTicks / HOUR_TICKS) + 1) * HOUR_TICKS);
+    regenEnergy(state.totalTicks - prevTicks);   // hour by hour, so a rest day only speeds up its own hours
     advanceGlobalStep(prevTicks);
   }
   if (typeof tickSocial === 'function') tickSocial();
@@ -1621,7 +1638,8 @@ function advanceGlobalStep(prevTicks){
   for (let d = daysBefore; d < daysAfter; d++){
     announcePlayerRank();
     applyInactivityPenalty();
-    checkCadence();
+    checkCadence(d);
+    if (typeof checkWeekPlan === 'function') checkWeekPlan(d);
     audienceDecay();
     payoutMembershipRevenue();
   }
@@ -2096,10 +2114,12 @@ function renderIdentity(){
   const name = state.channelName || 'My Channel';
   const setChannel = document.getElementById('set-channel');
   if (setChannel) setChannel.textContent = name;
+  const key = typeof avatarKey === 'function' ? avatarKey() : name;
+  const pic = () => typeof playerAvatarSVG === 'function' ? playerAvatarSVG() : faceSVG(name);
   const av = document.getElementById('channel-avatar');
-  if (av && av.dataset.face !== name){ av.innerHTML = faceSVG(name); av.dataset.face = name; }
+  if (av && av.dataset.face !== key){ av.innerHTML = pic(); av.dataset.face = key; }
   const sf = document.getElementById('sidebar-face');
-  if (sf && sf.dataset.face !== name){ sf.innerHTML = faceSVG(name); sf.dataset.face = name; }
+  if (sf && sf.dataset.face !== key){ sf.innerHTML = pic(); sf.dataset.face = key; }
 }
 
 /* ---------- Rendering: video list (Studio tab) ---------- */
@@ -3663,11 +3683,11 @@ function performUpload(o){
   const internetTier = EQUIPMENT.internet.tiers[state.equipTier.internet];
   if (Number.isFinite(internetTier.dataCapGB) && state.dataUsedGB + sizeGB > internetTier.dataCapGB){
     playErrorSound();
-    showToast(ic('wifi') + ` Not enough data left this cycle — buy more data or upgrade your plan in the Shop.`, true);
+    showToast(ic('wifi') + ` Not enough data left this cycle — buy more data or upgrade your plan in Customization → Gear.`, true);
     return null;
   }
 
-  const cost = o.collab ? COLLAB_ENERGY : energyCostFor(effortKey, lengthKey, formatKey, !!abThumb, topicKey, o.ctype);
+  const cost = o.collab ? COLLAB_ENERGY : energyCostFor(effortKey, lengthKey, formatKey, !!abThumb, topicKey, o.ctype, o.publishAt);
   const fatigue = fatigueFor(cost);
   const typeArch = ARCHETYPES[findType(topicKey, o.ctype).arch];
   if (typeArch.cost && !o.collab){
@@ -3859,7 +3879,9 @@ function renderStudioEnergy(){
   if (!el) return;
   const p = currentStudioPicks();
   const withAB = !!(p.abThumb && p.abThumb !== p.thumbKey);
-  const cost = energyCostFor(p.effortKey, p.lengthKey, p.formatKey, withAB, p.topicKey, currentCtype(p.topicKey));
+  const pubAt = typeof chosenPublishAt === 'function' ? chosenPublishAt() : null;
+  const cost = energyCostFor(p.effortKey, p.lengthKey, p.formatKey, withAB, p.topicKey, currentCtype(p.topicKey), pubAt);
+  const planOff = typeof planEnergyDiscount === 'function' ? planEnergyDiscount(p.topicKey, pubAt) : 0;
   const after = Math.max(0, state.energy - cost);
   const fatigue = fatigueFor(cost);
   const e = Math.round(state.energy);
@@ -3877,8 +3899,10 @@ function renderStudioEnergy(){
       ${fatigue > 0
         ? `This upload costs ${cost} and leaves you at ${Math.round(after)}. Below ${ENERGY_FATIGUE_LINE}, rushed work scores lower.`
         : `This upload costs ${cost} energy. You'll be at ${Math.round(after)} afterwards.`}
+      ${planOff ? ` Planned topic: ${planOff} less.` : ''}
       ${state.burnedOut ? ' You\'re burned out, so recovery is slower right now.' : ''}
     </div>`;
+  if (typeof renderPlanCheck === 'function') renderPlanCheck();
   const tb = document.getElementById('topbar-energy');
   if (tb){
     tb.textContent = e;
@@ -3920,7 +3944,7 @@ function renderThumbPreview(){
   const withAB = !!(p.abThumb && p.abThumb !== p.thumbKey);
   const one = (style, tag) => `
     <figure class="tp-item">
-      <div class="thumb-frame">${thumbSVG({ seed: 'preview', topic: p.topicKey, style, title: applyTitleStyle(sampleTitle, p.titleStyleKey), face: state.channelName })}</div>
+      <div class="thumb-frame">${thumbSVG({ seed: 'preview', topic: p.topicKey, style, title: applyTitleStyle(sampleTitle, p.titleStyleKey), face: typeof playerFaceSeed === 'function' ? playerFaceSeed() : state.channelName })}</div>
       <figcaption>${tag ? `<b>${tag}</b> ` : ''}${THUMBNAILS[style].label}</figcaption>
     </figure>`;
   el.classList.toggle('duo', withAB);
@@ -3954,6 +3978,7 @@ function switchTab(tab){
   if (tab === 'settings') renderSettings();
   if (tab === 'calendar') renderCalendar(true);
   if (tab === 'social') renderSocial(true);
+  if (tab === 'shop' && typeof renderChannelPage === 'function') renderChannelPage(true);
   if (changed) animateTabIn(document.getElementById('tab-' + tab));
   try { GameSelect.sync(); } catch(e){}
 }
@@ -4129,6 +4154,8 @@ function sanitizeState(){
     }
   }
   if (!CADENCES[state.cadence]) state.cadence = 'casual';
+  if (typeof ensureChannelState === 'function' && ensureChannelState() && state.channelName && Array.isArray(state.notifications))
+    state.notifications.unshift({ text: ic('sparkle') + ' New: make the channel yours. Tap your picture (top right) to build a face or logo, pick a banner, write an about, choose a category and plan your week.', tick: state.totalTicks });
   if (!['dark', 'light', 'system'].includes(state.theme)) state.theme = 'dark';
   sponsorBook();
   (state.rivals || []).forEach(r => { r.rel = clamp(num(r.rel, r.peer ? -10 : 0), -100, 100); });
@@ -4622,7 +4649,7 @@ function startGame(hadSave){
   });
 
   /* Studio: live thumbnail preview + energy forecast follow every picker */
-  ['topic-select', 'thumbnail-select', 'ab-thumbnail-select', 'length-select', 'effort-select', 'titlestyle-select', 'format-select'].forEach(id => {
+  ['topic-select', 'thumbnail-select', 'ab-thumbnail-select', 'length-select', 'effort-select', 'titlestyle-select', 'format-select', 'publish-select'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('change', () => { renderCtypeChips(); renderThumbPreview(); renderStudioEnergy(); });
   });
@@ -4666,6 +4693,7 @@ function startGame(hadSave){
   initCadenceUI();
   initSocialUI();
   initCalendarUI();
+  if (typeof initChannelUI === 'function') initChannelUI();
   initSituationsUI();
   initSocialMediaUI();
   applyTheme();
@@ -4696,7 +4724,7 @@ function refreshVideoModal(){
   if (m && m.classList.contains('show') && vaVideoId) renderVideoAnalytics();
 }
 function safeRenderAll(){
-  const renders = [renderIdentity, renderEquipment, renderStats, renderVideos, renderHome, renderRecentVideos, renderChannelProgress, renderAnalyticsOverview, renderStatusDonut, renderMonetization, renderCooldown, renderCreatorFeed, renderDiscoverFeed, renderWhoToFollow, renderNicheStatus, renderPartnerProgramme, renderSoundToggle, renderMusicToggle, renderGameClock, renderCollabs, renderStudioEnergy, renderCadencePanel, renderStudioCadence, renderPublishSelect, renderSponsorSelect, refreshVideoModal, renderIdentityCard, renderRivalWatch, renderCalendar, renderComingUp, renderDemographics, renderSituations, renderSocial, () => GameSelect.sync()];
+  const renders = [renderIdentity, renderEquipment, renderStats, renderVideos, renderHome, renderRecentVideos, renderChannelProgress, renderAnalyticsOverview, renderStatusDonut, renderMonetization, renderCooldown, renderCreatorFeed, renderDiscoverFeed, renderWhoToFollow, renderNicheStatus, renderPartnerProgramme, renderSoundToggle, renderMusicToggle, renderGameClock, renderCollabs, renderStudioEnergy, renderCadencePanel, renderStudioCadence, renderPublishSelect, renderSponsorSelect, refreshVideoModal, renderIdentityCard, renderRivalWatch, renderCalendar, renderComingUp, renderDemographics, renderSituations, renderSocial, renderChannelPage, checkChannelUnlocks, () => GameSelect.sync()];
   renders.forEach(fn => {
     try { fn(); } catch(e){ console.error('Render error in', fn.name, e); }
   });

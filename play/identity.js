@@ -47,11 +47,49 @@ function computeIdentity(){
   const best = candidates.sort((a, b) => b.score - a.score)[0];
   const trait = best && best.score >= 1 ? best.key : null;
 
+  // Creator style: do you ride what's hot, or make things people keep finding?
+  const trendShare = count(isTrendUpload), evergreenShare = count(isEvergreenUpload);
+  const style = trendShare >= STYLE_BAR && trendShare >= evergreenShare ? 'trend'
+              : evergreenShare >= STYLE_BAR ? 'evergreen' : null;
+  const lean = {
+    specialist: clamp((topShare - 0.25) / 0.3, 0, 1),
+    variety:    n ? clamp((0.85 - topShare) / 0.3, 0, 1) : 0,
+    trend:      clamp(trendShare / STYLE_BAR, 0, 1),
+    evergreen:  clamp(evergreenShare / STYLE_BAR, 0, 1),
+  };
+
   return {
     stage, main, topic: main === 'specialist' ? topTopic : null, trait, traitIsArch: !!(best && best.arch && trait),
     topicShares: topicList.slice(0, 3), archShares: Object.entries(archs).sort((a, b) => b[1] - a[1]).slice(0, 2),
-    total,
+    total, style, lean, trendShare, evergreenShare,
   };
+}
+
+/* ---------------- creator archetype ----------------
+   Not a class you pick. Your last 30 uploads place you on two axes:
+   focus (Specialist or Variety Creator) and timing (Trend Chaser, Evergreen Creator, or neither).
+   The archetype is the clearest of those leanings, and it moves as your uploads change. */
+const STYLE_BAR = 0.55;
+const EVERGREEN_TYPES = { guide: 1, review: 1, comparison: 1, list: 1 };
+// a guide made on a day guides happen to be the hot type is still a guide; a hot topic or a Pulse trend is chasing
+function isTrendUpload(v){ return (v.moodAtMake || 0) >= 15 || !!v.socialTie || (!!v.ctTrending && !EVERGREEN_TYPES[v.ctArch]); }
+function isEvergreenUpload(v){ return !!EVERGREEN_TYPES[v.ctArch] && !isTrendUpload(v); }
+const CREATOR_ARCHETYPES = {
+  specialist: { label: 'The Specialist',        short: 'Specialist',        line: 'Focuses heavily on one topic.',
+                how: 'More than half of your recent uploads share one topic.' },
+  variety:    { label: 'The Variety Creator',   short: 'Variety Creator',   line: 'Covers lots of topics.',
+                how: 'No single topic makes up most of your uploads.' },
+  trend:      { label: 'The Trend Chaser',      short: 'Trend Chaser',      line: 'Gets more out of trending topics.',
+                how: 'Most of your uploads ride a hot topic, a trending video type or a Pulse trend.' },
+  evergreen:  { label: 'The Evergreen Creator', short: 'Evergreen Creator', line: 'Older videos keep performing for longer.',
+                how: 'Most of your uploads are guides, reviews, comparisons or lists made away from trends.' },
+};
+/* The archetype to show: timing wins when it's clear, otherwise focus. */
+function creatorArchetype(id){
+  id = id || state.identity || computeIdentity();
+  if (!id) return null;
+  const key = id.style || id.main || null;
+  return key ? Object.assign({ key, focus: id.main, style: id.style }, CREATOR_ARCHETYPES[key]) : null;
 }
 function identityHeadline(id){
   if (!id || id.stage === 'none') return 'Too early to tell';
@@ -77,6 +115,7 @@ function identityEffects(v){
   // rivals piling onto a topic (trend chasers, premieres on the calendar) crowd it out for everyone
   const crowd = (state.topicCrowd || {})[v.topic] || 0;
   if (crowd > 0.05){ fx.algo -= Math.min(10, crowd * 10); fx.notes.push({ good: false, text: `Crowded: rivals just piled onto ${TOPICS[v.topic].label} (-${Math.round(Math.min(10, crowd * 10))})` }); }
+  if (typeof categoryEffect === 'function') categoryEffect(v, fx);   // the category you picked for your channel
   if (!id || k === 0) return fx;
   if (id.main === 'specialist'){
     if (v.topic === id.topic){ fx.algo += 7 * k; fx.notes.push({ good: true, text: `In your niche (+${Math.round(7 * k)})` }); }
@@ -86,6 +125,14 @@ function identityEffects(v){
     fx.algo -= mood * 0.15 * k;   // variety creators ride out topic swings: half the mood effect
     fx.algo += 5 * k;             // a broad audience: something for everyone, every upload
     fx.notes.push({ good: true, text: `Variety audience (+${Math.round(5 * k)})` });
+  }
+  if (id.style === 'trend'){
+    const m = v.moodAtMake || 0;
+    if (isTrendUpload(v)){ fx.algo += 4 * k; fx.notes.push({ good: true, text: `Trend Chaser: your audience came for what's hot (+${Math.round(4 * k)})` }); }
+    else if (m < 0){ fx.algo -= 3 * k; fx.notes.push({ good: false, text: 'Trend Chaser: a cold topic falls flat with your audience' }); }
+  } else if (id.style === 'evergreen'){
+    fx.algo -= (v.moodAtMake || 0) * 0.15 * k;   // search traffic doesn't care much about today's mood
+    if (isEvergreenUpload(v)){ fx.algo += 3 * k; fx.notes.push({ good: true, text: `Evergreen: people search for this kind of video (+${Math.round(3 * k)})` }); }
   }
   if (id.trait === 'quality'){
     fx.ctr += 2 * k;
@@ -137,15 +184,34 @@ function identitySponsorMult(){
 }
 function identitySponsorRefuses(){ const id = state.identity; return !!(id && id.trait === 'controversial' && Math.random() < 0.25 * identityStrength()); }
 
+/* How long a video lasts. Called from decideOutcome after the content type has shaped the curve. */
+function styleOutcome(v, r){
+  const id = state.identity, k = identityStrength();
+  if (!id || !k || !id.style) return r;
+  if (id.style === 'trend'){
+    if (isTrendUpload(v)) r.baseRate *= 1 + 0.2 * k;     // first-day spike when you ride a trend
+    r.floorFrac *= 1 - 0.25 * k;                          // ...but the trend moves on
+    r.decayFactor -= 0.003 * k;
+  } else {
+    r.baseRate *= 1 - 0.08 * k;                           // quieter launch
+    r.floorFrac *= 1 + 0.6 * k;                           // a long tail of search views
+    r.decayFactor += 0.003 * k;
+    r.pulseChance *= 1 + 0.5 * k;                         // old videos get rediscovered
+  }
+  return r;
+}
+
 /* After every upload: recompute, and celebrate a change. */
 function refreshIdentity(announce){
   const prev = state.identity;
   const next = computeIdentity();
   state.identity = next;
   if (!announce || next.stage === 'none') return;
-  const changed = !prev || prev.stage !== next.stage || prev.main !== next.main || prev.topic !== next.topic || prev.trait !== next.trait;
+  const changed = !prev || prev.stage !== next.stage || prev.main !== next.main || prev.topic !== next.topic || prev.trait !== next.trait || (prev.style || null) !== (next.style || null);
   if (!changed) return;
-  const line = next.stage === 'emerging'
+  const styleChanged = (!prev || (prev.style || null) !== (next.style || null)) && next.style && prev && prev.stage === next.stage && prev.main === next.main && prev.topic === next.topic && prev.trait === next.trait;
+  const line = styleChanged ? `Your uploads have made you ${next.style === 'trend' ? 'a Trend Chaser' : 'an Evergreen Creator'}.`
+    : next.stage === 'emerging'
     ? `Your channel is becoming ${identityHeadline(next).replace(/^a /, 'a ')}.`.replace('becoming known', 'becoming known').replace('becoming a reputation', 'building a reputation')
     : `Your audience now sees you as ${identityHeadline(next).replace(/^known for/, 'the channel known for').replace(/^a reputation/, 'the channel with a reputation')}.`;
   pushNotification(ic('star') + ' ' + line);
@@ -176,6 +242,8 @@ function identityEffectsList(id){
     out.push({ good: true, text: 'A broad audience gives every upload a small boost' });
     out.push({ good: false, text: 'No niche to own: smaller sponsor deals and weaker topic loyalty' });
   }
+  if (id.style === 'trend'){ out.push({ good: true, text: `Trending uploads launch harder (+20% first-day views${half})` }); out.push({ good: false, text: 'Videos fade faster, and cold topics fall flat' }); }
+  if (id.style === 'evergreen'){ out.push({ good: true, text: 'Older videos keep getting found for weeks' }); out.push({ good: true, text: "A topic's bad day barely touches you" }); out.push({ good: false, text: 'Quieter first days' }); }
   if (id.trait === 'quality'){ out.push({ good: true, text: 'Viewers trust your thumbnails (higher CTR)' }); out.push({ good: false, text: 'Quick, rushed edits get punished harder' }); }
   if (id.trait === 'shorts'){ out.push({ good: true, text: 'Your Shorts get pushed harder' }); out.push({ good: false, text: 'Long videos struggle to find your audience' }); }
   if (id.trait === 'controversial'){ out.push({ good: true, text: 'More clicks, more reach and far more comments' }); out.push({ good: false, text: 'Sponsors pay less, and some refuse to work with you' }); }
@@ -198,6 +266,8 @@ function renderIdentityCard(){
       <span class="id-stage ${id.stage}">${stageLbl}</span>
     </div>
     <div class="id-sub">${id.stage === 'none' ? `Your identity appears after 15 uploads (${toGo} to go). It's based on your last 30.` : id.stage === 'emerging' ? `Locks in at 30 uploads (${toGo} to go). It keeps shifting with your last 30 uploads.` : 'Based on your last 30 uploads. Change what you make and it will slowly change too.'}</div>
+    ${(() => { const a = creatorArchetype(id); if (!a || id.stage === 'none') return ''; const focus = id.style ? (id.main === 'specialist' && id.topic ? ` · also a ${TOPICS[id.topic].label} Specialist` : ' · also a Variety Creator') : '';
+      return `<button class="id-arch" type="button" data-open-channel="archetype"><span>Archetype</span><b>${a.label}</b><em>${focus}</em>${ic('chevronRight')}</button>`; })()}
     ${id.topicShares.length ? `<div class="id-bars">${id.topicShares.map(bar).join('')}</div>` : ''}
     ${identityEffectsList(id).length ? `<div class="id-fx-list">${identityEffectsList(id).map(e => `<div class="idm-fx ${e.good ? 'good' : 'bad'}">${e.good ? '+' : '−'} ${e.text}</div>`).join('')}</div>` : ''}`;
 }

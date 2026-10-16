@@ -31,11 +31,16 @@ function lastUploadAt(){ return (state.uploadLog || []).reduce((m, t) => t <= st
 function streakDays(){ return (state.cadStreak || 0) * cadence().windowDays; }
 
 /* Runs once per in-game day crossed (from advanceGlobalTicks). */
-function checkCadence(){
+function checkCadence(endedDay){
   if (!(state.uploadLog || []).length) return;          // nothing to judge before the first upload
   const C = cadence();
   state.cadDayCount = (state.cadDayCount || 0) + 1;
   if (state.cadDayCount % C.windowDays !== 0) return;   // casual is judged every 2 days
+  // rest days on your weekly plan don't count against you (a 2-day window needs both to be rest)
+  if (typeof planFor === 'function' && typeof endedDay === 'number'){
+    const rest = d => planFor(d) === 'rest';
+    if (C.windowDays === 1 ? rest(endedDay) : rest(endedDay) && rest(endedDay - 1)) return;
+  }
   const made = uploadsInLastDays(C.windowDays);
   if (made >= C.need){
     state.cadStreak = Math.min(99, (state.cadStreak || 0) + 1);
@@ -118,6 +123,7 @@ function goLive(v, atTick){
   const t = typeof atTick === 'number' ? atTick : state.totalTicks;
   v.publishPhase = 'live';
   v.publishHour = Math.floor(clockMinute(t) / 60);
+  v.liveDay = clockDay(t);
   if (!v.logged){ state.uploadLog.push(t); v.logged = true; }
   state.lastUploadTick = Math.max(state.lastUploadTick || 0, t);
   videoLiveHooks(v);
@@ -131,6 +137,7 @@ function videoLiveHooks(v){
   if (typeof rebaseScheduledVideo === 'function') rebaseScheduledVideo(v);   // a scheduled video meets the day it actually lands on
   if (typeof applyFollowUp === 'function') applyFollowUp(v);                 // a follow-up promised in a Situation
   if (typeof onVideoLiveSocial === 'function') onVideoLiveSocial(v);         // Pulse teasers and trend tie-ins
+  if (typeof planOnLive === 'function') planOnLive(v);                       // the weekly plan for the day it lands on
 }
 /* Every tick: publish anything that's due. */
 function publishDueVideos(){

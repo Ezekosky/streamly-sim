@@ -229,14 +229,38 @@
   ];
   const HAIR = ['#16161a', '#33220f', '#5e3a17', '#b57726', '#e3cf7d', '#a8342f', '#2b3f8f', '#6b3f8f'];
   const SHIRT = ['#ef4444', '#2f6bff', '#ffc93c', '#18181b', '#22c55e', '#ff7ac2', '#f4f4f5', '#8b5cf6'];
+  const FACE_BG = [['#3b82f6', '#1e40af'], ['#f59e0b', '#b45309'], ['#22c55e', '#15803d'], ['#a78bfa', '#6d28d9'], ['#ef4444', '#991b1b'], ['#06b6d4', '#0e7490']];
+  const AV_BG = FACE_BG.concat([['#3f3f46', '#09090b'], ['#f472b6', '#9d174d'], ['#f5d061', '#a16207']]);   // last one: Gilded, unlocked later
 
-  function face(seed, cx, cy, sc, expr, flip, G){
+  /* A face is either drawn from a seed (rivals, and you until you build your own) or from
+     an explicit spec "av:skin.hair.style.shirt.glasses.bg" made in the channel editor. */
+  function parseSpec(seed){
+    const m = /^av:(\d+)\.(\d+)\.(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(String(seed));
+    if (!m) return null;
+    const n = m.slice(1).map(Number);
+    return { skin: n[0] % SKIN.length, hair: n[1] % HAIR.length, style: n[2] % 6, shirt: n[3] % SHIRT.length, glasses: n[4] ? 1 : 0, bg: n[5] % AV_BG.length };
+  }
+  /* What a seed's face looks like, as editor indices (so the editor starts from your current face). */
+  function faceParams(seed){
+    const spec = parseSpec(seed);
+    if (spec) return spec;
     const r = rng('face:' + seed);
-    const [skin, shade] = pick(r, SKIN);
-    const hair = pick(r, HAIR), shirt = pick(r, SHIRT);
-    const hairHi = '#fff';
+    const idx = arr => Math.floor(r() * arr.length);
+    const skin = idx(SKIN), hair = idx(HAIR), shirt = idx(SHIRT);
     const style = Math.floor(r() * 5);
-    const glasses = r() < .2;
+    const glasses = r() < .2 ? 1 : 0;
+    const rb = rng('bg:' + seed);
+    return { skin, hair, style, shirt, glasses, bg: Math.floor(rb() * FACE_BG.length) };
+  }
+  function face(seed, cx, cy, sc, expr, flip, G){
+    const spec = parseSpec(seed);
+    const r = rng('face:' + seed);
+    let [skin, shade] = pick(r, SKIN);
+    let hair = pick(r, HAIR), shirt = pick(r, SHIRT);
+    const hairHi = '#fff';
+    let style = Math.floor(r() * 5);
+    let glasses = r() < .2;
+    if (spec){ [skin, shade] = SKIN[spec.skin]; hair = HAIR[spec.hair]; shirt = SHIRT[spec.shirt]; style = spec.style; glasses = !!spec.glasses; }
     const shock = expr === 'shock', happy = expr === 'funny', fierce = expr === 'action';
     const ink = '#1a1a22';
     const skinFill = G ? G.lin([[skin], [shade]]) : skin;
@@ -263,6 +287,7 @@
     if (style === 2) s += `<path d="M-14-7l4-11 3 7 3-10 3 8 3-10 3 8 3-6 3 11q-13-6-25 3z" fill="${hair}"/>`;
     if (style === 3) s += `<path d="M-14.5-3q2-18 16-17 12 1 13 15-11-10-29 2z" fill="${hair}"/><path d="M-9-14q7-3 13 1" stroke="${hairHi}" stroke-width="1.6" opacity=".3" fill="none" stroke-linecap="round"/>`;
     if (style === 4) s += `<path d="M-14.5-6q3-14 14.5-14t14.5 14q-10-8-29 0z" fill="${hair}"/>`;
+    if (style === 5) s += `<path d="M-14-5.5q0-13.5 14-13.5t14 13.5q-6-4.5-14-4.5t-14 4.5z" fill="${hair}" opacity=".42"/>`;   // buzz cut
     // eyebrows: thick, expressive
     if (shock) s += `<path d="M-10.5-11q4-4 8-1" stroke="${ink}" stroke-width="2.4" fill="none" stroke-linecap="round"/><path d="M10.5-11q-4-4-8-1" stroke="${ink}" stroke-width="2.4" fill="none" stroke-linecap="round"/>`;
     else if (fierce) s += `<path d="M-10.5-8l8 2.5" stroke="${ink}" stroke-width="2.4" stroke-linecap="round"/><path d="M10.5-8l-8 2.5" stroke="${ink}" stroke-width="2.4" stroke-linecap="round"/>`;
@@ -398,8 +423,8 @@
   function faceSVG(seed){
     const r = rng('bg:' + seed);
     const G = gradients('f' + hashStr(String(seed)).toString(36));
-    const pairs = [['#3b82f6', '#1e40af'], ['#f59e0b', '#b45309'], ['#22c55e', '#15803d'], ['#a78bfa', '#6d28d9'], ['#ef4444', '#991b1b'], ['#06b6d4', '#0e7490']];
-    const [c1, c2] = pick(r, pairs);
+    const spec = parseSpec(seed);
+    const [c1, c2] = spec ? AV_BG[spec.bg] : pick(r, FACE_BG);
     const body = `<rect x="-20" y="-20" width="40" height="40" fill="${G.lin([[c1], [c2]])}"/><circle cx="0" cy="-2" r="16" fill="#fff" opacity=".08"/>${face(seed, 0, 6, 1.12, 'neutral', false, G)}`;
     return `<svg class="face-svg" viewBox="-20 -20 40 40" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${defsBlock(G.defs)}${body}</svg>`;
   }
@@ -448,4 +473,6 @@
 
   window.thumbSVG = memo(thumbSVG, 't:');
   window.faceSVG = memo(faceSVG, 'f:');
+  window.faceParams = faceParams;
+  window.FACE_PARTS = { skin: SKIN, hair: HAIR, shirt: SHIRT, bg: AV_BG };
 })();

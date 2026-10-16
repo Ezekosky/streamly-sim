@@ -288,7 +288,7 @@ function postCardHTML(p){
   }
   return `<article class="pp-card${p.viral ? ' viral' : ''}">
     <div class="pp-head">
-      <span class="face-avatar pp-av">${faceSVG(state.channelName || 'me')}</span>
+      <span class="face-avatar pp-av">${(typeof playerAvatarSVG === 'function' ? playerAvatarSVG() : faceSVG(state.channelName || 'me'))}</span>
       <div class="pp-who"><b>${state.channelName || 'You'}</b><span>${socialHandle()} · ${feedTimeAgo(p.at)}</span></div>
       <span class="pp-type">${ic(T.icon)}${T.label}</span>
     </div>
@@ -363,7 +363,7 @@ function renderSocial(force){
       </div>
       <div class="pp-side">
         <div class="panel-box pp-profile">
-          <div class="pp-prof-top"><span class="face-avatar pp-av big">${faceSVG(state.channelName || 'me')}</span><div><b>${state.channelName || 'You'}</b><span>${socialHandle()}</span></div></div>
+          <div class="pp-prof-top"><span class="face-avatar pp-av big">${(typeof playerAvatarSVG === 'function' ? playerAvatarSVG() : faceSVG(state.channelName || 'me'))}</span><div><b>${state.channelName || 'You'}</b><span>${socialHandle()}</span></div></div>
           <div class="pp-prof-num"><b id="pp-followers">${fmt(book.followers)}</b><span>followers on Pulse</span></div>
           <div class="pp-prof-sub" id="pp-week"></div>
           <div class="pp-prof-note">About 15% of your new subscribers follow you here too.</div>

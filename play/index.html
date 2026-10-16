@@ -449,6 +449,7 @@
           <button type="button" class="topic-tile" data-value="football"><span class="tile-icon"></span><span class="tile-name">Football</span></button>
           <button type="button" class="topic-tile" data-value="cooking"><span class="tile-icon"></span><span class="tile-name">Cooking</span></button>
         </div>
+        <div class="plan-check" id="plan-check"></div>
         <select id="topic-select" class="hidden-select">
           <option value="gaming">Gaming</option>
           <option value="comedy">Comedy</option>
@@ -577,10 +578,19 @@
       <div class="shop-head-row">
         <div>
           <h2 class="shop-title">Customization</h2>
-          <div class="shop-sub">Upgrade your gear and studio.</div>
+          <div class="shop-sub" id="shop-sub">Your picture, banner, details and weekly schedule.</div>
         </div>
         <div class="shop-balance mono" id="shop-balance">$0</div>
       </div>
+
+      <div class="cust-switch" id="cust-switch" role="tablist">
+        <button type="button" class="on" data-cust="channel" role="tab">Your channel</button>
+        <button type="button" data-cust="gear" role="tab">Gear</button>
+      </div>
+
+      <div id="cust-channel"><div id="channel-root"><!-- injected by channel.js --></div></div>
+
+      <div id="cust-gear" style="display:none">
 
       <div class="shop-tabs content-subtabs" id="shop-tabs">
         <button type="button" class="shop-tab underline-tab active" data-cat="all">Equipment</button>
@@ -603,6 +613,7 @@
           <div class="roadmap-item">Room Decor</div>
           <div class="roadmap-item">Office Upgrade</div>
         </div>
+      </div>
       </div>
     </div>
 
@@ -924,6 +935,10 @@
               <div><div class="set-name">Channel name</div><div class="set-sub">Shown on your videos and in the feed</div></div>
               <div class="set-inline"><input class="setup-input small" id="set-name-input" maxlength="24" placeholder="My Channel"><button class="mini-btn" id="set-name-save">Save</button></div>
             </div>
+            <div class="set-row">
+              <div><div class="set-name">Picture, banner and about</div><div class="set-sub">Plus your category and weekly upload schedule</div></div>
+              <button class="mini-btn" id="set-customize" type="button">Customize</button>
+            </div>
             <div id="settings-stats" class="set-stats"></div>
           </div>
         </div>
@@ -1105,6 +1120,7 @@
   <script src="situations.js"></script>
   <script src="socialmedia.js"></script>
   <script src="calendar.js"></script>
+  <script src="channel.js"></script>
   <script src="game.js"></script>
 </body>
 </html>
