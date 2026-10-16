@@ -3027,3 +3027,20 @@ html.is-app .app{
 .nap-btn .inline-ic{ color:var(--accent); }
 .sp-actions{ flex-wrap:wrap; }
 .sp-actions .mini-btn .inline-ic{ margin-right:5px; vertical-align:-2px; }
+
+/* v1.1 creator reputation */
+.sp-fit{ display:flex; align-items:center; flex-wrap:wrap; gap:4px 8px; margin:8px 0; font-size:12px; padding:6px 10px; border-radius:8px; background:var(--surface-2); color:var(--dim); }
+.sp-fit b{ font-weight:600; color:var(--text); }
+.sp-fit span{ color:var(--faint); }
+.sp-fit .inline-ic{ width:13px; height:13px; margin:0; }
+.sp-fit.good{ background:var(--gain-soft); } .sp-fit.good .inline-ic, .sp-fit.good b{ color:var(--gain); }
+.sp-fit.poor{ background:var(--warn-soft); } .sp-fit.poor .inline-ic, .sp-fit.poor b{ color:var(--warn); }
+.rep-panel{ margin-top:0; }
+.rep-grid{ display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:22px; }
+@media (max-width:760px){ .rep-grid{ grid-template-columns:minmax(0,1fr); } }
+.rep-head{ display:flex; justify-content:space-between; align-items:baseline; font-size:13px; font-weight:600; margin-bottom:8px; }
+.rep-head b{ font-size:15px; }
+.rep-note{ font-size:12px; color:var(--faint); line-height:1.5; margin-top:9px; }
+.meter-track .fill.trust-high{ background:var(--gain); }
+.meter-track .fill.trust-wary{ background:var(--warn); }
+.meter-track .fill.trust-low{ background:var(--live); }

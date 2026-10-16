@@ -125,7 +125,11 @@ const SITUATIONS = {
     tone: 'bad', tag: 'Sponsor backlash', weight: 2,
     check(){
       const v = sitPickRecent(v => v.sponsorBrand && v.age > 60 && v.age < DAY_TICKS && v.views >= 60);
-      return v ? { videoId: v.id, topic: v.topic, title: v.title, brand: v.sponsorBrand, justified: (v.satisfaction || 50) < 58 } : null;
+      if (!v) return null;
+      // a trusted creator with a sponsor that fits rarely gets this
+      const trust = typeof sponsorTrust === 'function' ? sponsorTrust() : 60;
+      if (v.sponsorFit !== 'poor' && trust >= 75 && Math.random() < 0.7) return null;
+      return { videoId: v.id, topic: v.topic, title: v.title, brand: v.sponsorBrand, justified: (v.satisfaction || 50) < 58 || v.sponsorFit === 'poor' };
     },
     make(c){
       return { title: `Viewers say the ${c.brand} segment ruined "${sitShort(c.title)}".`,
@@ -135,13 +139,13 @@ const SITUATIONS = {
     choices: { respond: ['Stand by the sponsor', 'The brand will love it, some viewers won’t'], apologize: ['Promise shorter ad reads', 'Viewers like it, the brand less so'],
       video: ['Make a sponsor-free video to make it up', 'Any topic, no sponsor, within 12h'], ignore: ['Ignore it', 'Might cost a few subs'] },
     resolve(k, c){
-      if (k === 'respond') return { text: `${c.brand} appreciated the support. Some viewers rolled their eyes.`, fx: { rep: 4, subs: c.justified ? -0.003 : -0.001 } };
-      if (k === 'apologize') return { text: 'Viewers liked the promise. The brand was a bit less happy.', fx: { rep: -2, loyal: 3, algo: 1 } };
+      if (k === 'respond') return { text: `${c.brand} appreciated the support. Some viewers rolled their eyes.`, fx: { rep: 4, trust: -3, subs: c.justified ? -0.003 : -0.001 } };
+      if (k === 'apologize') return { text: 'Viewers liked the promise. The brand was a bit less happy.', fx: { rep: -2, trust: 4, loyal: 3, algo: 1 } };
       return sitRoll(0.5) ? { text: 'It faded.', fx: {} } : { text: 'A few people unsubscribed over it.', fx: { subs: -0.002 } };
     },
     follow: { label: 'a sponsor-free video for your viewers', prefix: '', algo: 4, any: true,
       req: v => !v.sponsorBrand, reqText: 'no sponsor attached',
-      done: { text: 'A no-ads video for the fans. Goodwill restored.', fx: { loyal: 3, subs: 0.002 } },
+      done: { text: 'A no-ads video for the fans. Goodwill restored.', fx: { loyal: 3, trust: 5, subs: 0.002 } },
       missed: { text: 'The promised ad-free video never came.', fx: { loyal: -2 } } },
   },
 
@@ -356,7 +360,8 @@ function applySitFx(fx, ctx, extra){
   }
   if (extra && extra.claim && v){ v.rate *= 0.4; if (Number.isFinite(v.authorityCap)) v.authorityCap = Math.min(v.authorityCap, v.views * 1.1); out.push({ good: false, text: 'Video stopped being recommended' }); }
   if (fx.rel && r){ adjustRel(r, fx.rel); out.push({ good: fx.rel > 0, text: `${r.name} ${fx.rel > 0 ? '+' : '−'}${Math.abs(fx.rel)} relationship` }); }
-  if (fx.rep && typeof sponsorBook === 'function' && state.unlocks.sponsorships){ const b = sponsorBook(); b.rep = clamp(b.rep + fx.rep, 0, 100); out.push({ good: fx.rep > 0, text: `Brand reputation ${fx.rep > 0 ? '+' : '−'}${Math.abs(fx.rep)}` }); }
+  if (fx.rep && typeof sponsorBook === 'function' && state.unlocks.sponsorships){ const b = sponsorBook(); b.rep = clamp(b.rep + fx.rep, 0, 100); out.push({ good: fx.rep > 0, text: `Sponsor reputation ${fx.rep > 0 ? '+' : '−'}${Math.abs(fx.rep)}` }); }
+  if (fx.trust && typeof shiftTrust === 'function' && state.unlocks.sponsorships){ shiftTrust(fx.trust); out.push({ good: fx.trust > 0, text: `Creator reputation ${fx.trust > 0 ? '+' : '−'}${Math.abs(fx.trust)}` }); }
   const topic = ctx.topic && TOPICS[ctx.topic] ? ctx.topic : playerNiche();
   if (fx.loyal && topic && TOPICS[topic]){
     const L = state.audienceLoyalty;

@@ -106,6 +106,53 @@ function sponsorBook(){
   return b;
 }
 function sponsorTier(){ const r = sponsorBook().rep; return r >= 70 ? 2 : r >= 40 ? 1 : 0; }
+
+/* ---------- Creator reputation: how your audience takes sponsored content ----------
+   Sponsor reputation (book.rep) is how BRANDS see you. Creator reputation (book.trust) is how
+   your VIEWERS feel about the ads you run. Sponsors that fit what you make raise it; off-topic
+   sponsors and stacking sponsored uploads lower it. It drifts back up on its own, so a few
+   bad picks are a dip, never a hole. */
+const TRUST_START = 70, TRUST_FLOOR = 10, TRUST_RECOVER_TO = 60, TRUST_RECOVER_PER_DAY = 2;
+function sponsorTrust(){
+  const b = sponsorBook();
+  if (typeof b.trust !== 'number' || !isFinite(b.trust)) b.trust = TRUST_START;
+  return b.trust;
+}
+const TRUST_TIERS = [
+  { min: 80, key: 'high',   label: 'Trusted',     line: 'Your audience trusts your picks. Offers pay 12% more and sponsor segments barely cost you.', pay: 1.12, offers: 1.25, pen: 1 },
+  { min: 55, key: 'steady', label: 'Steady',      line: 'Your audience is fine with sponsors that make sense.', pay: 1, offers: 1, pen: 2 },
+  { min: 35, key: 'wary',   label: 'Wary',        line: 'Your audience is getting tired of sponsored content. Offers pay a little less and ad reads cost more retention.', pay: 0.92, offers: 0.9, pen: 3 },
+  { min: 0,  key: 'low',    label: 'Tuned out',   line: 'Your audience skips your sponsor segments. Pick sponsors that fit and give it a break; it recovers on its own.', pay: 0.85, offers: 0.75, pen: 4 },
+];
+function trustTier(t){ t = t === undefined ? sponsorTrust() : t; return TRUST_TIERS.find(x => t >= x.min); }
+/* how well a deal's topic matches what your audience actually watches */
+function dealFit(d){
+  const vids = typeof recentAudienceVideos === 'function' ? recentAudienceVideos() : [];
+  if (vids.length < 3 || typeof audienceTopicShares !== 'function') return { key: 'ok', label: 'Fit unknown yet', hint: 'Make a few videos first' };
+  const s = audienceTopicShares(vids)[d.topic] || 0;
+  if (s >= 0.3) return { key: 'good', label: 'Fits your audience', hint: 'Raises creator reputation' };
+  if (s >= 0.1) return { key: 'ok', label: 'Partial fit', hint: 'No effect on creator reputation' };
+  return { key: 'poor', label: 'Off-topic for your audience', hint: 'Lowers creator reputation' };
+}
+function shiftTrust(delta){
+  const b = sponsorBook(), before = sponsorTrust();
+  b.trust = clamp(before + delta, TRUST_FLOOR, 100);
+  const after = b.trust;
+  if (offlineFastForward) return;
+  const note = (msg, toast) => toast ? showToast(ic('megaphone') + ' ' + msg, true) : pushNotification(ic('megaphone') + ' ' + msg); // showToast also logs it
+  if (before >= 45 && after < 45) note('Your audience is becoming less responsive to sponsored content. Pick sponsors that fit what you make, and space them out.', true);
+  else if (before < 60 && after >= 60 && b.trustWarned) note('Your audience is warming back up to your sponsors.', false);
+  else if (before < 80 && after >= 80) note('Your audience trusts your recommendations. Brands pay more for that.', true);
+  if (after < 45) b.trustWarned = true; else if (after >= 60) b.trustWarned = false;
+}
+/* daily: drift back toward a neutral level, a couple of points a day */
+function recoverTrust(){
+  const b = sponsorBook(), day = clockDay();
+  if (b.trustDay === day) return;
+  const days = b.trustDay === undefined ? 0 : Math.max(0, day - b.trustDay);
+  b.trustDay = day;
+  if (days && sponsorTrust() < TRUST_RECOVER_TO) shiftTrust(Math.min(TRUST_RECOVER_TO - b.trust, TRUST_RECOVER_PER_DAY * days));
+}
 function recentTypicalViews(){
   const vids = state.videos.filter(v => (!v.publishPhase || v.publishPhase === 'live') && !v.isVod && v.format !== 'shorts' && v.age > 600).slice(-8).map(v => v.views).sort((a, b) => a - b);
   if (!vids.length) return Math.max(300, state.subs * 0.3);
@@ -134,7 +181,7 @@ function makeSponsorOffer(){
   const repeatMult = 1 + 0.2 * Math.min(5, hist.happy);
   const typical = recentTypicalViews();
   const minViews = Math.max(300, niceRound(typical * rand(0.7, 1.35) * (1 + 0.08 * hist.happy)));
-  const payment = Math.round((40 + minViews * rand(0.012, 0.022)) * [1, 1.5, 2.3][brand.tier] * repeatMult * identitySponsorMult() * (typeof demoRpmMult === 'function' ? Math.pow(demoRpmMult(), 0.7) : 1) / 5) * 5;
+  const payment = Math.round((40 + minViews * rand(0.012, 0.022)) * [1, 1.5, 2.3][brand.tier] * repeatMult * identitySponsorMult() * trustTier().pay * (typeof demoRpmMult === 'function' ? Math.pow(demoRpmMult(), 0.7) : 1) / 5) * 5;
   const deal = {
     id: 'sp' + Date.now().toString(36) + Math.floor(Math.random() * 1000),
     brand: brand.name, product: prod[0], topic, payment, minViews,
@@ -149,6 +196,7 @@ function makeSponsorOffer(){
 function tickSponsors(){
   if (!state.unlocks.sponsorships) return;
   const book = sponsorBook();
+  recoverTrust();
   // expire unanswered offers, fail missed deadlines, judge finished campaigns
   book.deals.forEach(d => {
     if (d.status === 'offer' && state.totalTicks >= d.expiresAt){ d.status = 'expired'; }
@@ -166,7 +214,7 @@ function tickSponsors(){
   });
   const open = book.deals.filter(d => d.status === 'offer' || d.status === 'active').length;
   if (open >= 3 || offlineFastForward) return;
-  if (Math.random() < 1 / 24){
+  if (Math.random() < trustTier().offers / 24){
     const d = makeSponsorOffer();
     if (d) announceOffer(d);
   }
@@ -183,7 +231,7 @@ function settleDeal(d, v){
   const ratio = v.views / d.minViews;
   let pay, outcome;
   const typeBonus = v.ctArch && ARCHETYPES[v.ctArch] && ARCHETYPES[v.ctArch].sponsor ? 1.15 : 1;  // reviews/unboxings sell better
-  if (ratio >= 1){ pay = d.payment * typeBonus * (ratio >= 2 ? 1.25 : 1); outcome = 'satisfied'; book.rep = clamp(book.rep + (ratio >= 2 ? 12 : 8), 0, 100); h.happy++; }
+  if (ratio >= 1){ pay = d.payment * typeBonus * (ratio >= 2 ? 1.25 : 1); outcome = 'satisfied'; book.rep = clamp(book.rep + (ratio >= 2 ? 12 : 8), 0, 100); h.happy++; if (d.fit === 'good') shiftTrust(2); }
   else if (ratio >= 0.6){ pay = d.payment * 0.7; outcome = 'mixed'; book.rep = clamp(book.rep + 1, 0, 100); }
   else { pay = d.payment * 0.4; outcome = 'disappointed'; book.rep = clamp(book.rep - 8, 0, 100); h.sad++; }
   pay = Math.round(pay * 100) / 100;
@@ -202,7 +250,7 @@ function settleDeal(d, v){
   const newTier = sponsorTier();
   if (newTier > (book.lastTier || 0)){
     book.lastTier = newTier;
-    showMoment({ tag: 'Sponsor reputation', tone: 'money', title: `${SPONSOR_TIER_LABEL[newTier]} are calling`, lines: [`Your brand reputation is ${Math.round(book.rep)}. Bigger names and bigger contracts can now reach out.`], actions: [{ label: 'Sponsorships', tab: 'monetization', sub: 'sponsor' }] });
+    showMoment({ tag: 'Sponsor reputation', tone: 'money', title: `${SPONSOR_TIER_LABEL[newTier]} are calling`, lines: [`Your sponsor reputation is ${Math.round(book.rep)}. Bigger names and bigger contracts can now reach out.`], actions: [{ label: 'Sponsorships', tab: 'monetization', sub: 'sponsor' }] });
   }
 }
 function acceptDeal(id){
@@ -243,14 +291,27 @@ function renderSponsorSelect(){
   const cur = sel.value;
   sel.innerHTML = '<option value="">No sponsor</option>' + deals.map(d => `<option value="${d.id}" ${d.topic !== topic ? 'disabled' : ''} ${d.id === cur ? 'selected' : ''}>${d.brand} (${TOPICS[d.topic].label}) · $${fmt(d.payment)}${d.topic !== topic ? ' · wrong topic' : ''}</option>`).join('');
   const hint = document.getElementById('sponsor-hint');
-  if (hint){ const d = deals.find(x => x.id === sel.value); hint.textContent = d ? `Needs ${fmt(d.minViews)} views within 2 days of going live. Sponsor segments cost a little retention.` : `${deals.length} active deal${deals.length === 1 ? '' : 's'} waiting for a video.`; }
+  if (hint){ const d = deals.find(x => x.id === sel.value); hint.textContent = d ? `Needs ${fmt(d.minViews)} views within 2 days of going live. ${dealFit(d).label}: ${dealFit(d).hint.toLowerCase()}. The ad read costs a little retention.` : `${deals.length} active deal${deals.length === 1 ? '' : 's'} waiting for a video.`; }
 }
 function attachSponsor(v, dealId){
   const d = sponsorBook().deals.find(x => x.id === dealId);
   if (!d || d.status !== 'active' || d.videoId || d.topic !== v.topic) return;
-  d.videoId = v.id; v.sponsorBrand = d.brand;
-  v.retention = clamp(v.retention - 2, 5, 98); v.satisfaction = clamp(v.satisfaction - 2, 5, 99);  // the ad read
-  if (Array.isArray(v.comments)) v.comments.push({ by: randomHandle(v.topic), text: pickW([`Not gonna lie, the ${d.brand} segment was smooth.`, `Skipped the ${d.brand} part lol`, `Bought the ${d.product} because of this.`, `Is the ${d.product} actually good?`]) });
+  const fit = dealFit(d);
+  // how many of your last 5 uploads already carried a sponsor
+  const recentSponsored = state.videos.filter(x => x !== v && !x.isVod).slice(-5).filter(x => x.sponsorBrand).length;
+  d.videoId = v.id; d.fit = fit.key; v.sponsorBrand = d.brand; v.sponsorFit = fit.key;
+  const pen = trustTier().pen + (fit.key === 'poor' ? 1 : 0);   // the ad read costs more when viewers are tired of it
+  v.retention = clamp(v.retention - pen, 5, 98); v.satisfaction = clamp(v.satisfaction - pen, 5, 99);
+  shiftTrust((fit.key === 'good' ? 3 : fit.key === 'poor' ? -6 : 0) - (recentSponsored >= 3 ? 4 : 0));
+  if (recentSponsored >= 3 && !offlineFastForward) showToast(ic('megaphone') + ` That's ${recentSponsored + 1} sponsored videos in your last 6. Viewers are starting to notice.`);
+  const lines = fit.key === 'poor'
+    ? [`Why is a ${TOPICS[playerNiche() || v.topic].label.toLowerCase()} channel doing a ${d.brand} ad?`, `Not the ${d.brand} ad 💀`, `This sponsor has nothing to do with the channel.`]
+    : trustTier().key === 'low' || trustTier().key === 'wary'
+      ? [`Another sponsor... skipping.`, `Every video is an ad now.`, `Skipped the ${d.brand} part lol`]
+      : fit.key === 'good'
+        ? [`Not gonna lie, the ${d.brand} segment was smooth.`, `Bought the ${d.product} because of this.`, `This sponsor actually makes sense for this channel.`]
+        : [`Skipped the ${d.brand} part lol`, `Is the ${d.product} actually good?`, `Not gonna lie, the ${d.brand} segment was smooth.`];
+  if (Array.isArray(v.comments)) v.comments.push({ by: randomHandle(v.topic), text: pickW(lines) });
 }
 function renderSponsorDetail(el){
   const book = sponsorBook();
@@ -263,6 +324,7 @@ function renderSponsorDetail(el){
     <div class="sp-card">
       <div class="sp-head"><span class="sp-brand">${d.brand.toUpperCase()}${d.repeat ? ' <i class="sp-rep">Repeat</i>' : ''}</span><b>$${fmt(d.payment)}</b></div>
       <div class="sp-line">Promote our ${d.product}.</div>
+      ${d.status === 'offer' || (d.status === 'active' && !d.videoId) ? (() => { const f = dealFit(d); return `<div class="sp-fit ${f.key}">${f.key === 'good' ? ic('check') : f.key === 'poor' ? ic('alert') : ''}<b>${f.label}</b><span>${f.hint}</span></div>`; })() : ''}
       <div class="sp-meta"><span>Topic: ${TOPICS[d.topic].label}</span><span>Min views: ${fmt(d.minViews)}</span><span>${d.status === 'offer' ? `Deadline: ${d.dueDays} days` : `Due ${formatTick(d.dueAt).replace(/^Day /, 'day ')}`}</span></div>
       ${d.status === 'offer' ? `<div class="sp-actions"><button class="mini-btn" data-sp-accept="${d.id}">Accept</button>${d.negotiated ? '' : `<button class="mini-btn" data-sp-nego="${d.id}">${ic('tv')}Ask for ${Math.round((NEGOTIATE_MULT - 1) * 100)}% more</button>`}<button class="mini-btn" data-sp-decline="${d.id}">Decline</button><span class="sp-exp">Offer ends in ${Math.max(1, Math.round((d.expiresAt - state.totalTicks) / 60))}h</span></div>` : ''}
       ${d.status === 'active' ? (() => {
@@ -274,10 +336,25 @@ function renderSponsorDetail(el){
     </div>`;
   el.innerHTML = `
     <div class="stats-4">
-      ${monStat('Sponsorship revenue', '$' + state.sponsorshipRevenue.toFixed(2), '')}
-      ${monStat('Brand reputation', Math.round(book.rep) + ' / 100', SPONSOR_TIER_LABEL[tier])}
-      ${monStat('Deals completed', fmt(book.deals.filter(d => d.status === 'done').length), repeatBrands.length ? 'Repeat: ' + repeatBrands.slice(0, 2).join(', ') : 'Hit the numbers to earn repeats')}
+      ${monStat('Sponsorship revenue', '$' + state.sponsorshipRevenue.toFixed(2), fmt(book.deals.filter(d => d.status === 'done').length) + ' deals completed' + (repeatBrands.length ? ' · repeat: ' + repeatBrands.slice(0, 2).join(', ') : ''))}
+      ${monStat('Sponsor reputation', Math.round(book.rep) + ' / 100', SPONSOR_TIER_LABEL[tier])}
+      ${monStat('Creator reputation', Math.round(sponsorTrust()) + ' / 100', trustTier().label)}
       ${monStat('Active', fmt(active.length) + ' / 2', offers.length ? offers.length + ' offer' + (offers.length === 1 ? '' : 's') + ' waiting' : 'No offers waiting')}
+    </div>
+    <div class="panel-box rep-panel">
+      <h3>Reputation</h3>
+      <div class="rep-grid">
+        <div class="rep-item">
+          <div class="rep-head"><span>Sponsor reputation</span><b class="mono">${Math.round(book.rep)}</b></div>
+          <div class="meter-track"><div class="fill" style="width:${Math.round(book.rep)}%"></div></div>
+          <div class="rep-note">How brands see you. Hit the view targets to raise it. Bigger brands write in at 40 and 70.</div>
+        </div>
+        <div class="rep-item">
+          <div class="rep-head"><span>Creator reputation</span><b class="mono">${Math.round(sponsorTrust())}</b></div>
+          <div class="meter-track"><div class="fill trust-${trustTier().key}" style="width:${Math.round(sponsorTrust())}%"></div></div>
+          <div class="rep-note">How your audience takes sponsored videos. ${trustTier().line} Sponsors that fit raise it; off-topic ones and too many sponsored uploads in a row lower it. It recovers slowly on its own.</div>
+        </div>
+      </div>
     </div>
     <div class="an-duo-grid">
       <div class="panel-box"><h3>Offers</h3>${offers.length ? offers.map(card).join('') : '<div class="empty-hint">No offers right now. Brands write in every day or so; a niche and steady views bring better ones.</div>'}</div>
