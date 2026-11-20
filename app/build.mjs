@@ -126,6 +126,13 @@ function buildAndroid(){
   if (!manifest.includes('android:screenOrientation')){
     manifest = replaceOnce(manifest, /<activity(\s)/, '<activity android:screenOrientation="sensorLandscape"$1', 'the main <activity>');
   }
+  // A landscape-only screen makes Google Play assume the app REQUIRES a landscape screen,
+  // which hides it from some devices. Say it's not required: the game still runs in landscape.
+  if (!manifest.includes('android.hardware.screen.landscape')){
+    manifest = replaceOnce(manifest, /(\s*)(<application[\s>])/,
+      '$1<uses-feature android:name="android.hardware.screen.landscape" android:required="false" />$1$2',
+      'the <application> tag (for the landscape feature)');
+  }
   if (!manifest.includes('com.google.android.gms.ads.APPLICATION_ID')){
     manifest = replaceOnce(manifest, /(<application[^>]*>)/,
       `$1\n        <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="@string/admob_app_id"/>`,
